@@ -38,8 +38,18 @@ export function SentimentBadge({ sentiment }: { sentiment: Sentiment }) {
   );
 }
 
+const SOURCE_CODES: Record<NewsSource, string> = {
+  Reuters: "RTRS",
+  Bloomberg: "BBG",
+  "Yahoo Finance": "YHOO",
+  CNBC: "CNBC",
+  MarketWatch: "MKTW",
+  "Financial Times": "FT",
+  "Investing.com": "INVG",
+};
+
 export function SourceBadge({ source }: { source: NewsSource }) {
-  const code = source === "Reuters" ? "RTRS" : source === "Bloomberg" ? "BBG" : "YHOO";
+  const code = SOURCE_CODES[source] ?? source.slice(0, 4).toUpperCase();
   return (
     <span className="terminal-chip !text-cyan !border-cyan/40">
       <span className="font-bold">{code}</span>

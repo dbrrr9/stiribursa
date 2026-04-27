@@ -4,7 +4,7 @@ import { ArrowLeft, ExternalLink, AlertCircle } from "lucide-react";
 import { TerminalHeader } from "@/components/terminal/header";
 import { ImpactBadge, SentimentBadge, SourceBadge, RelevanceBar } from "@/components/terminal/badges";
 import { formatTimestamp, timeAgo } from "@/components/terminal/clock";
-import { THEME_LABELS } from "@/lib/news-types";
+import { THEME_LABELS, type NewsItem, type ThemeTag, type MarketRegion } from "@/lib/news-types";
 import { analyzeArticle, getNewsItem } from "@/lib/news.functions";
 
 export const Route = createFileRoute("/article/$id")({
@@ -61,7 +61,8 @@ export const Route = createFileRoute("/article/$id")({
 });
 
 function ArticlePage() {
-  const { item } = Route.useLoaderData();
+  const loaderData = Route.useLoaderData() as { item: NewsItem | null };
+  const { item } = loaderData;
 
   if (!item) {
     return (
