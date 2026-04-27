@@ -1,4 +1,11 @@
-export type NewsSource = "Reuters" | "Bloomberg" | "Yahoo Finance";
+export type NewsSource =
+  | "Reuters"
+  | "Bloomberg"
+  | "Yahoo Finance"
+  | "CNBC"
+  | "MarketWatch"
+  | "Financial Times"
+  | "Investing.com";
 export type ImpactLevel = "high" | "medium" | "low";
 export type Sentiment = "positive" | "negative" | "mixed" | "uncertain";
 export type ThemeTag =
