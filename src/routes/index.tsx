@@ -1,26 +1,260 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { z } from "zod";
+import { zodValidator, fallback } from "@tanstack/zod-adapter";
+import { TerminalHeader } from "@/components/terminal/header";
+import { TickerBar } from "@/components/terminal/ticker-bar";
+import { FilterBar, type FilterState } from "@/components/terminal/filter-bar";
+import { NewsCard, NewsCardSkeleton } from "@/components/terminal/news-card";
+import { fetchLatestNews } from "@/lib/news.functions";
+import type { NewsItem, NewsSource, ThemeTag, ImpactLevel } from "@/lib/news-types";
+import { Zap, Flame, Sparkles } from "lucide-react";
 
-export const Route = createFileRoute("/")({
-  component: Index,
+const searchSchema = z.object({
+  q: fallback(z.string(), "").default(""),
+  src: fallback(z.array(z.string()), []).default([]),
+  th: fallback(z.array(z.string()), []).default([]),
+  imp: fallback(z.array(z.string()), []).default([]),
+  sort: fallback(z.enum(["relevance", "newest"]), "relevance").default("relevance"),
 });
 
-// IMPORTANT: Replace this placeholder. For sites with multiple pages (About, Services, Contact, etc.),
-// create separate route files (about.tsx, services.tsx, contact.tsx) — don't put all pages in this file.
-function PlaceholderIndex() {
+export const Route = createFileRoute("/")({
+  validateSearch: zodValidator(searchSchema),
+  head: () => ({
+    meta: [
+      { title: "CAPITAL::TERM — Terminal de știri pentru piața de capital" },
+      {
+        name: "description",
+        content:
+          "Agregator premium de știri Reuters, Bloomberg și Yahoo Finance, filtrate și explicate pentru investitori. Înțelegi rapid ce s-a întâmplat și ce impact are pe piețe.",
+      },
+      { property: "og:title", content: "CAPITAL::TERM — Terminal financiar" },
+      {
+        property: "og:description",
+        content: "Cele mai relevante știri pentru piața de capital, explicate clar.",
+      },
+    ],
+  }),
+  component: HomePage,
+});
+
+function HomePage() {
+  const search = Route.useSearch();
+  const navigate = useNavigate({ from: "/" });
+
+  const filterState: FilterState = {
+    q: search.q,
+    sources: search.src as NewsSource[],
+    themes: search.th as ThemeTag[],
+    impacts: search.imp as ImpactLevel[],
+    sort: search.sort,
+  };
+
+  const setFilter = (next: FilterState) =>
+    navigate({
+      search: {
+        q: next.q,
+        src: next.sources,
+        th: next.themes,
+        imp: next.impacts,
+        sort: next.sort,
+      },
+      replace: true,
+    });
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["news"],
+    queryFn: () => fetchLatestNews(),
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
+  });
+
+  const items = data?.items ?? [];
+
+  const filtered = useMemo(() => {
+    let arr = [...items];
+    if (filterState.q.trim()) {
+      const q = filterState.q.toLowerCase();
+      arr = arr.filter(
+        (n) =>
+          n.title.toLowerCase().includes(q) ||
+          n.summary.toLowerCase().includes(q) ||
+          n.themes.some((t) => t.includes(q)) ||
+          n.sectors?.some((s) => s.toLowerCase().includes(q)),
+      );
+    }
+    if (filterState.sources.length)
+      arr = arr.filter((n) => filterState.sources.includes(n.source));
+    if (filterState.themes.length)
+      arr = arr.filter((n) => n.themes.some((t) => filterState.themes.includes(t)));
+    if (filterState.impacts.length)
+      arr = arr.filter((n) => filterState.impacts.includes(n.impact));
+
+    if (filterState.sort === "newest") {
+      arr.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+    } else {
+      const w = { high: 3, medium: 2, low: 1 } as const;
+      arr.sort((a, b) => w[b.impact] * 30 + b.relevanceScore - (w[a.impact] * 30 + a.relevanceScore));
+    }
+    return arr;
+  }, [items, filterState]);
+
+  const topMover = filtered[0];
+  const highImpact = filtered.filter((n) => n.impact === "high").slice(0, 3);
+  const movers = filtered
+    .filter((n) => n.impact !== "low" && n.id !== topMover?.id)
+    .slice(0, 4);
+
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
+    <div className="terminal-root min-h-screen">
+      <TerminalHeader />
+      <TickerBar items={items} />
+
+      <main className="mx-auto max-w-7xl px-4 sm:px-6 py-6 sm:py-10 space-y-6 sm:space-y-8">
+        {/* HERO */}
+        <section className="terminal-card p-6 sm:p-8 fade-up">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-phosphor">
+              ▸ market intelligence
+            </span>
+            <span className="h-px flex-1 bg-gradient-to-r from-phosphor/40 to-transparent" />
+            <span className="font-mono text-[10px] text-muted-foreground tabular-nums">
+              {data?.source === "live" ? "LIVE FEED" : data?.source === "cache" ? "CACHED" : "SEED"}
+            </span>
+          </div>
+          <h1 className="font-sans text-2xl sm:text-4xl font-bold leading-tight tracking-tight mb-3 [text-wrap:balance]">
+            Știrile care mișcă piețele,{" "}
+            <span className="text-phosphor glow-text-phosphor">explicate clar</span>
+            <span className="blink-cursor" />
+          </h1>
+          <p className="text-muted-foreground text-sm sm:text-base max-w-2xl leading-relaxed">
+            Agregăm Reuters, Bloomberg și Yahoo Finance. Filtrăm doar ce contează pentru piața de
+            capital. La un click, transformăm fiecare știre într-o analiză simplă: ce s-a întâmplat,
+            de ce contează, ce impact poate avea pe acțiuni, obligațiuni, FX și mărfuri.
+          </p>
+        </section>
+
+        {/* FILTERS */}
+        <FilterBar state={filterState} onChange={setFilter} totalCount={filtered.length} />
+
+        {/* MOST IMPORTANT TODAY */}
+        {!isLoading && topMover && (
+          <section className="space-y-3">
+            <SectionHeader
+              icon={<Flame className="h-3.5 w-3.5" />}
+              label="MOST IMPORTANT TODAY"
+              accent="impact-high"
+            />
+            <NewsCard item={topMover} index={0} />
+          </section>
+        )}
+
+        {/* POTENTIAL MARKET MOVERS */}
+        {!isLoading && movers.length > 0 && (
+          <section className="space-y-3">
+            <SectionHeader
+              icon={<Zap className="h-3.5 w-3.5" />}
+              label="POTENTIAL MARKET MOVERS"
+              accent="amber"
+            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+              {movers.map((n, i) => (
+                <NewsCard key={n.id} item={n} index={i + 1} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* LATEST HIGH-IMPACT */}
+        {!isLoading && highImpact.length > 0 && (
+          <section className="space-y-3">
+            <SectionHeader
+              icon={<Sparkles className="h-3.5 w-3.5" />}
+              label="LATEST HIGH-IMPACT HEADLINES"
+              accent="cyan"
+            />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+              {highImpact.map((n, i) => (
+                <NewsCard key={n.id} item={n} index={i + 5} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ALL FEED */}
+        <section className="space-y-3">
+          <SectionHeader
+            icon={<span className="font-mono text-[10px]">▸</span>}
+            label={`MARKET FEED · ${filtered.length} știri`}
+            accent="phosphor"
+          />
+          {isLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <NewsCardSkeleton key={i} />
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
+            <EmptyState onReset={() => setFilter({ q: "", sources: [], themes: [], impacts: [], sort: filterState.sort })} />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+              {filtered.map((n, i) => (
+                <NewsCard key={n.id} item={n} index={i} />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <footer className="pt-8 pb-4 text-center font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+          CAPITAL::TERM v1.0 · agregat din Reuters · Bloomberg · Yahoo Finance · explicații AI în română
+        </footer>
+      </main>
     </div>
   );
 }
 
-function Index() {
-  return <PlaceholderIndex />;
+function SectionHeader({
+  icon,
+  label,
+  accent,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  accent: "phosphor" | "cyan" | "amber" | "impact-high";
+}) {
+  const colorMap = {
+    phosphor: "text-phosphor border-phosphor/40",
+    cyan: "text-cyan border-cyan/40",
+    amber: "text-amber border-amber/40",
+    "impact-high": "text-impact-high border-impact-high/40",
+  };
+  return (
+    <div className="flex items-center gap-3">
+      <div className={`flex items-center gap-1.5 px-2 py-1 rounded-sm border ${colorMap[accent]} bg-current/5`}>
+        <span className={colorMap[accent].split(" ")[0]}>{icon}</span>
+        <span className={`font-mono text-[10px] uppercase tracking-[0.15em] font-semibold ${colorMap[accent].split(" ")[0]}`}>
+          {label}
+        </span>
+      </div>
+      <span className="h-px flex-1 bg-gradient-to-r from-border to-transparent" />
+    </div>
+  );
+}
+
+function EmptyState({ onReset }: { onReset: () => void }) {
+  return (
+    <div className="terminal-card p-12 text-center">
+      <div className="font-mono text-phosphor mb-2">// no_results.txt</div>
+      <p className="text-muted-foreground mb-4">
+        Niciun rezultat pentru filtrele curente.
+      </p>
+      <button
+        onClick={onReset}
+        className="font-mono text-xs uppercase tracking-wider px-4 py-2 rounded-sm border border-phosphor/60 text-phosphor hover:bg-phosphor/10 transition-colors"
+      >
+        ▸ resetează filtrele
+      </button>
+    </div>
+  );
 }
