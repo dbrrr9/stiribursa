@@ -3,7 +3,15 @@ import { cn } from "@/lib/utils";
 import type { NewsSource, ThemeTag, ImpactLevel } from "@/lib/news-types";
 import { THEME_LABELS } from "@/lib/news-types";
 
-const SOURCES: NewsSource[] = ["Reuters", "Bloomberg", "Yahoo Finance"];
+const SOURCES: NewsSource[] = [
+  "Reuters",
+  "Bloomberg",
+  "Yahoo Finance",
+  "CNBC",
+  "MarketWatch",
+  "Financial Times",
+  "Investing.com",
+];
 const THEMES: ThemeTag[] = [
   "actiuni",
   "obligatiuni",
