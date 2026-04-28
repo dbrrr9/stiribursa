@@ -20,24 +20,50 @@ const CACHE_TTL_MS = 1000 * 60 * 10; // 10 min
 const analysisCache = new Map<string, ArticleAnalysis>();
 
 // ============================================================================
-// RSS FEEDS — surse publice, fără API key, direct de pe site-urile financiare
+// RSS FEEDS — surse publice, fără API key
+// Reuters & Bloomberg sunt agregate prin Google News (RSS public, gratuit, legal)
+// pentru că ambele și-au închis feed-urile RSS oficiale.
 // ============================================================================
-const RSS_FEEDS: { source: NewsSource; url: string; weight: number }[] = [
-  // Reuters Markets — feed oficial
-  { source: "Reuters", url: "https://feeds.reuters.com/reuters/businessNews", weight: 1 },
-  // Yahoo Finance — toate feed-urile market
-  { source: "Yahoo Finance", url: "https://finance.yahoo.com/news/rssindex", weight: 1 },
-  // CNBC Top News & Markets
-  { source: "CNBC", url: "https://www.cnbc.com/id/100003114/device/rss/rss.html", weight: 1 },
-  { source: "CNBC", url: "https://www.cnbc.com/id/10000664/device/rss/rss.html", weight: 1 }, // Markets
-  // MarketWatch
-  { source: "MarketWatch", url: "https://feeds.content.dowjones.io/public/rss/mw_topstories", weight: 1 },
-  { source: "MarketWatch", url: "https://feeds.content.dowjones.io/public/rss/mw_marketpulse", weight: 1 },
-  // Financial Times — markets
-  { source: "Financial Times", url: "https://www.ft.com/markets?format=rss", weight: 1 },
-  // Investing.com news
-  { source: "Investing.com", url: "https://www.investing.com/rss/news_25.rss", weight: 1 },
+// "primary" = Reuters, Bloomberg, Yahoo — cota 70-80% din feed
+// "secondary" = restul (CNBC, MarketWatch, FT, Investing) — folosite doar
+// pentru a completa cu știri de impact înalt când lipsesc primarele.
+type FeedTier = "primary" | "secondary";
+const RSS_FEEDS: { source: NewsSource; url: string; tier: FeedTier }[] = [
+  // === PRIMARY (target ~75%) ===
+  // Reuters via Google News — markets/business/economy
+  {
+    source: "Reuters",
+    url: "https://news.google.com/rss/search?q=site:reuters.com+(markets+OR+stocks+OR+economy+OR+fed+OR+earnings)&hl=en-US&gl=US&ceid=US:en",
+    tier: "primary",
+  },
+  // Bloomberg via Google News
+  {
+    source: "Bloomberg",
+    url: "https://news.google.com/rss/search?q=site:bloomberg.com+(markets+OR+stocks+OR+economy+OR+fed+OR+earnings)&hl=en-US&gl=US&ceid=US:en",
+    tier: "primary",
+  },
+  // Yahoo Finance — feed direct, încă funcțional
+  {
+    source: "Yahoo Finance",
+    url: "https://finance.yahoo.com/news/rssindex",
+    tier: "primary",
+  },
+  // Yahoo Finance via Google News (back-up + breadth)
+  {
+    source: "Yahoo Finance",
+    url: "https://news.google.com/rss/search?q=site:finance.yahoo.com+(markets+OR+stocks+OR+earnings)&hl=en-US&gl=US&ceid=US:en",
+    tier: "primary",
+  },
+
+  // === SECONDARY (umplem doar restul de ~25%, doar high/medium impact) ===
+  { source: "CNBC", url: "https://www.cnbc.com/id/10000664/device/rss/rss.html", tier: "secondary" },
+  { source: "MarketWatch", url: "https://feeds.content.dowjones.io/public/rss/mw_topstories", tier: "secondary" },
+  { source: "Financial Times", url: "https://www.ft.com/markets?format=rss", tier: "secondary" },
 ];
+
+// % minim pentru sursele primare (Reuters + Bloomberg + Yahoo)
+const PRIMARY_QUOTA = 0.75;
+const TARGET_TOTAL = 60;
 
 // ============================================================================
 // AI helper (opțional — folosit doar dacă LOVABLE_API_KEY e configurat)
