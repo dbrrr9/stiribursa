@@ -8,7 +8,8 @@ import { TickerBar } from "@/components/terminal/ticker-bar";
 import { FilterBar, type FilterState } from "@/components/terminal/filter-bar";
 import { NewsCard, NewsCardSkeleton } from "@/components/terminal/news-card";
 import { fetchLatestNews } from "@/lib/news.functions";
-import type { NewsItem, NewsSource, ThemeTag, ImpactLevel } from "@/lib/news-types";
+import { CustomAnalyzer } from "@/components/terminal/custom-analyzer";
+import type { NewsSource, ThemeTag, ImpactLevel } from "@/lib/news-types";
 import { Zap, Flame, Sparkles } from "lucide-react";
 
 const searchSchema = z.object({
@@ -134,6 +135,9 @@ function HomePage() {
             de ce contează, ce impact poate avea pe acțiuni, obligațiuni, FX și mărfuri.
           </p>
         </section>
+
+        {/* CUSTOM AI ANALYZER */}
+        <CustomAnalyzer />
 
         {/* FILTERS */}
         <FilterBar state={filterState} onChange={setFilter} totalCount={filtered.length} />

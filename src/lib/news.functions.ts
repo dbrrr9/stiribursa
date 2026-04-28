@@ -20,24 +20,50 @@ const CACHE_TTL_MS = 1000 * 60 * 10; // 10 min
 const analysisCache = new Map<string, ArticleAnalysis>();
 
 // ============================================================================
-// RSS FEEDS — surse publice, fără API key, direct de pe site-urile financiare
+// RSS FEEDS — surse publice, fără API key
+// Reuters & Bloomberg sunt agregate prin Google News (RSS public, gratuit, legal)
+// pentru că ambele și-au închis feed-urile RSS oficiale.
 // ============================================================================
-const RSS_FEEDS: { source: NewsSource; url: string; weight: number }[] = [
-  // Reuters Markets — feed oficial
-  { source: "Reuters", url: "https://feeds.reuters.com/reuters/businessNews", weight: 1 },
-  // Yahoo Finance — toate feed-urile market
-  { source: "Yahoo Finance", url: "https://finance.yahoo.com/news/rssindex", weight: 1 },
-  // CNBC Top News & Markets
-  { source: "CNBC", url: "https://www.cnbc.com/id/100003114/device/rss/rss.html", weight: 1 },
-  { source: "CNBC", url: "https://www.cnbc.com/id/10000664/device/rss/rss.html", weight: 1 }, // Markets
-  // MarketWatch
-  { source: "MarketWatch", url: "https://feeds.content.dowjones.io/public/rss/mw_topstories", weight: 1 },
-  { source: "MarketWatch", url: "https://feeds.content.dowjones.io/public/rss/mw_marketpulse", weight: 1 },
-  // Financial Times — markets
-  { source: "Financial Times", url: "https://www.ft.com/markets?format=rss", weight: 1 },
-  // Investing.com news
-  { source: "Investing.com", url: "https://www.investing.com/rss/news_25.rss", weight: 1 },
+// "primary" = Reuters, Bloomberg, Yahoo — cota 70-80% din feed
+// "secondary" = restul (CNBC, MarketWatch, FT, Investing) — folosite doar
+// pentru a completa cu știri de impact înalt când lipsesc primarele.
+type FeedTier = "primary" | "secondary";
+const RSS_FEEDS: { source: NewsSource; url: string; tier: FeedTier }[] = [
+  // === PRIMARY (target ~75%) ===
+  // Reuters via Google News — markets/business/economy
+  {
+    source: "Reuters",
+    url: "https://news.google.com/rss/search?q=site:reuters.com+(markets+OR+stocks+OR+economy+OR+fed+OR+earnings)&hl=en-US&gl=US&ceid=US:en",
+    tier: "primary",
+  },
+  // Bloomberg via Google News
+  {
+    source: "Bloomberg",
+    url: "https://news.google.com/rss/search?q=site:bloomberg.com+(markets+OR+stocks+OR+economy+OR+fed+OR+earnings)&hl=en-US&gl=US&ceid=US:en",
+    tier: "primary",
+  },
+  // Yahoo Finance — feed direct, încă funcțional
+  {
+    source: "Yahoo Finance",
+    url: "https://finance.yahoo.com/news/rssindex",
+    tier: "primary",
+  },
+  // Yahoo Finance via Google News (back-up + breadth)
+  {
+    source: "Yahoo Finance",
+    url: "https://news.google.com/rss/search?q=site:finance.yahoo.com+(markets+OR+stocks+OR+earnings)&hl=en-US&gl=US&ceid=US:en",
+    tier: "primary",
+  },
+
+  // === SECONDARY (umplem doar restul de ~25%, doar high/medium impact) ===
+  { source: "CNBC", url: "https://www.cnbc.com/id/10000664/device/rss/rss.html", tier: "secondary" },
+  { source: "MarketWatch", url: "https://feeds.content.dowjones.io/public/rss/mw_topstories", tier: "secondary" },
+  { source: "Financial Times", url: "https://www.ft.com/markets?format=rss", tier: "secondary" },
 ];
+
+// % minim pentru sursele primare (Reuters + Bloomberg + Yahoo)
+const PRIMARY_QUOTA = 0.75;
+const TARGET_TOTAL = 60;
 
 // ============================================================================
 // AI helper (opțional — folosit doar dacă LOVABLE_API_KEY e configurat)
@@ -130,24 +156,28 @@ function parseRSS(xml: string, source: NewsSource): RawArticle[] {
   const itemBlocks = xml.match(/<item[\s>][\s\S]*?<\/item>/gi) ?? [];
   const entryBlocks = xml.match(/<entry[\s>][\s\S]*?<\/entry>/gi) ?? [];
 
+  const stripSuffix = (t: string) =>
+    t.replace(/\s+-\s+(Reuters|Bloomberg|Yahoo!? Finance|CNBC|MarketWatch|Financial Times|FT|Investing\.com)\s*$/i, "").trim();
+
   for (const block of itemBlocks) {
-    const title = extractTag(block, "title");
+    let title = extractTag(block, "title");
     const link = extractTag(block, "link");
     const pubDate = extractTag(block, "pubDate") || extractTag(block, "dc:date");
     const description =
       extractTag(block, "description") ||
       extractTag(block, "content:encoded") ||
       extractTag(block, "summary");
+    title = stripSuffix(title);
     if (title) items.push({ title, link, pubDate, description, source });
   }
 
   for (const block of entryBlocks) {
-    const title = extractTag(block, "title");
-    // Atom: <link href="..."/>
+    let title = extractTag(block, "title");
     const linkMatch = block.match(/<link[^>]*href=["']([^"']+)["']/i);
     const link = linkMatch ? linkMatch[1] : extractTag(block, "link");
     const pubDate = extractTag(block, "updated") || extractTag(block, "published");
     const description = extractTag(block, "summary") || extractTag(block, "content");
+    title = stripSuffix(title);
     if (title) items.push({ title, link, pubDate, description, source });
   }
 
@@ -342,20 +372,41 @@ export const fetchLatestNews = createServerFn({ method: "GET" }).handler(async (
       .filter((x): x is NewsItem => x !== null);
 
     if (classified.length >= 5) {
-      // Sort by impact + relevance + recency
-      classified.sort((a, b) => {
-        const w = { high: 3, medium: 2, low: 1 } as const;
-        const score = (n: NewsItem) =>
-          w[n.impact] * 30 +
-          n.relevanceScore -
-          (Date.now() - new Date(n.publishedAt).getTime()) / (1000 * 60 * 60);
-        return score(b) - score(a);
-      });
+      const w = { high: 3, medium: 2, low: 1 } as const;
+      const scoreOf = (n: NewsItem) =>
+        w[n.impact] * 30 +
+        n.relevanceScore -
+        (Date.now() - new Date(n.publishedAt).getTime()) / (1000 * 60 * 60);
 
-      // Limităm la primele ~60 ca să nu copleșim UI-ul
-      const items = classified.slice(0, 60);
-      newsCache = { items, ts: Date.now() };
-      return { items, cached: false, source: "live" as const };
+      classified.sort((a, b) => scoreOf(b) - scoreOf(a));
+
+      // QUOTA: ~75% Reuters/Bloomberg/Yahoo, restul doar high/medium impact
+      const PRIMARY = new Set<NewsSource>(["Reuters", "Bloomberg", "Yahoo Finance"]);
+      const primaryItems = classified.filter((n) => PRIMARY.has(n.source));
+      const secondaryItems = classified.filter(
+        (n) => !PRIMARY.has(n.source) && n.impact !== "low",
+      );
+
+      const primaryQuota = Math.round(TARGET_TOTAL * PRIMARY_QUOTA);
+      const items: NewsItem[] = [
+        ...primaryItems.slice(0, primaryQuota),
+        ...secondaryItems.slice(0, TARGET_TOTAL - Math.min(primaryQuota, primaryItems.length)),
+      ];
+
+      // Dacă lipsesc primarele, completăm cu secundare
+      if (items.length < TARGET_TOTAL) {
+        const have = new Set(items.map((n) => n.id));
+        for (const n of classified) {
+          if (items.length >= TARGET_TOTAL) break;
+          if (!have.has(n.id)) items.push(n);
+        }
+      }
+
+      // Re-sortare finală pentru a păstra ordinea după scor
+      items.sort((a, b) => scoreOf(b) - scoreOf(a));
+
+      newsCache = { items: items.slice(0, TARGET_TOTAL), ts: Date.now() };
+      return { items: newsCache.items, cached: false, source: "live" as const };
     }
   } catch (e) {
     console.error("RSS aggregation failed:", e);
@@ -496,3 +547,128 @@ export const getNewsItem = createServerFn({ method: "POST" })
     }
     return { item };
   });
+
+// ============================================================================
+// CUSTOM NEWS ANALYSIS — utilizatorul lipește un URL sau text și AI explică
+// ============================================================================
+const customAnalyzeSchema = z.object({
+  input: z.string().min(10).max(8000),
+});
+
+export const analyzeCustomNews = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => customAnalyzeSchema.parse(data))
+  .handler(
+    async ({
+      data,
+    }): Promise<{
+      analysis: ArticleAnalysis | null;
+      title: string;
+      sourceLabel: string;
+      error?: string;
+    }> => {
+      const raw = data.input.trim();
+      const isUrl = /^https?:\/\/\S+$/i.test(raw);
+
+      let title = "Știre furnizată de utilizator";
+      let bodyText = raw;
+      let sourceLabel = "Sursă utilizator";
+
+      // Dacă e URL, încercăm să extragem titlul + primele paragrafe
+      if (isUrl) {
+        try {
+          const urlObj = new URL(raw);
+          sourceLabel = urlObj.hostname.replace(/^www\./, "");
+          const r = await fetch(raw, {
+            headers: {
+              "User-Agent":
+                "Mozilla/5.0 (compatible; CapitalTermBot/1.0; +https://capital-term.app)",
+              Accept: "text/html,application/xhtml+xml",
+            },
+            signal: AbortSignal.timeout(8000),
+          });
+          if (r.ok) {
+            const html = await r.text();
+            const titleMatch =
+              html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i) ||
+              html.match(/<title[^>]*>([^<]+)<\/title>/i);
+            if (titleMatch) title = decodeEntities(titleMatch[1]).slice(0, 200);
+
+            const descMatch =
+              html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i) ||
+              html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i);
+            const desc = descMatch ? decodeEntities(descMatch[1]) : "";
+
+            // Extragem primele <p>...</p> ca context suplimentar
+            const paragraphs = (html.match(/<p[^>]*>([\s\S]*?)<\/p>/gi) ?? [])
+              .map((p) => decodeEntities(p))
+              .filter((t) => t.length > 60)
+              .slice(0, 8)
+              .join("\n\n");
+
+            bodyText = [title, desc, paragraphs].filter(Boolean).join("\n\n").slice(0, 6000);
+            if (bodyText.length < 80) bodyText = `${title}\n${desc || raw}`;
+          } else {
+            bodyText = `Nu am putut accesa URL-ul (${r.status}). Te rog lipește textul știrii direct.`;
+            return {
+              analysis: null,
+              title,
+              sourceLabel,
+              error: `Nu pot accesa URL-ul (status ${r.status}). Lipește textul știrii direct.`,
+            };
+          }
+        } catch (e) {
+          return {
+            analysis: null,
+            title,
+            sourceLabel,
+            error: `Nu pot accesa URL-ul: ${e instanceof Error ? e.message : "eroare necunoscută"}. Lipește textul știrii direct.`,
+          };
+        }
+      } else {
+        // E text liber — primul rând devine titlu
+        const firstLine = raw.split("\n")[0].trim();
+        if (firstLine.length > 8 && firstLine.length < 200) title = firstLine;
+      }
+
+      if (!process.env.LOVABLE_API_KEY) {
+        return {
+          analysis: fallbackAnalysis({ title, source: sourceLabel, summary: bodyText.slice(0, 300) }),
+          title,
+          sourceLabel,
+          error: "AI-ul nu este configurat. Afișăm o analiză de bază.",
+        };
+      }
+
+      const sys = `Ești un analist financiar senior care explică știri de piață pentru investitori români. Scrii în limba română, clar, profesionist, fără clickbait. Folosești paragrafe scurte. Când apar termeni tehnici (yield, basis points, hawkish, dovish, FOMC, EBITDA), îi explici scurt în paranteză. Te concentrezi pe IMPACT REAL asupra piețelor: acțiuni, obligațiuni, FX, mărfuri, crypto.`;
+
+      const usr = `Analizează următoarea știre furnizată de utilizator și produ o explicație completă pentru un investitor român. Identifică singur tema, regiunea și piețele afectate.
+
+SURSĂ: ${sourceLabel}
+TITLU: ${title}
+
+CONȚINUT:
+${bodyText}
+
+Generează o analiză completă urmând schema cerută. Dacă textul nu este o știre financiară clară, oferă oricum cel mai bun context posibil despre eventualul impact pe piețe.`;
+
+      try {
+        const result = (await callAI(usr, sys, ANALYSIS_SCHEMA)) as ArticleAnalysis | null;
+        if (result) {
+          return { analysis: result, title, sourceLabel };
+        }
+        return {
+          analysis: fallbackAnalysis({ title, source: sourceLabel, summary: bodyText.slice(0, 300) }),
+          title,
+          sourceLabel,
+        };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "unknown";
+        const fb = fallbackAnalysis({ title, source: sourceLabel, summary: bodyText.slice(0, 300) });
+        if (msg.includes("429"))
+          return { analysis: fb, title, sourceLabel, error: "Prea multe cereri AI. Încearcă din nou în câteva secunde." };
+        if (msg.includes("402"))
+          return { analysis: fb, title, sourceLabel, error: "Credite AI epuizate. Adaugă credite în Settings → Workspace → Usage." };
+        return { analysis: fb, title, sourceLabel, error: "Eroare AI. Afișăm o analiză de bază." };
+      }
+    },
+  );
