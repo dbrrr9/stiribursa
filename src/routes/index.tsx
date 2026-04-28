@@ -136,6 +136,9 @@ function HomePage() {
           </p>
         </section>
 
+        {/* CUSTOM AI ANALYZER */}
+        <CustomAnalyzer />
+
         {/* FILTERS */}
         <FilterBar state={filterState} onChange={setFilter} totalCount={filtered.length} />
 
