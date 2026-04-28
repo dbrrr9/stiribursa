@@ -156,24 +156,28 @@ function parseRSS(xml: string, source: NewsSource): RawArticle[] {
   const itemBlocks = xml.match(/<item[\s>][\s\S]*?<\/item>/gi) ?? [];
   const entryBlocks = xml.match(/<entry[\s>][\s\S]*?<\/entry>/gi) ?? [];
 
+  const stripSuffix = (t: string) =>
+    t.replace(/\s+-\s+(Reuters|Bloomberg|Yahoo!? Finance|CNBC|MarketWatch|Financial Times|FT|Investing\.com)\s*$/i, "").trim();
+
   for (const block of itemBlocks) {
-    const title = extractTag(block, "title");
+    let title = extractTag(block, "title");
     const link = extractTag(block, "link");
     const pubDate = extractTag(block, "pubDate") || extractTag(block, "dc:date");
     const description =
       extractTag(block, "description") ||
       extractTag(block, "content:encoded") ||
       extractTag(block, "summary");
+    title = stripSuffix(title);
     if (title) items.push({ title, link, pubDate, description, source });
   }
 
   for (const block of entryBlocks) {
-    const title = extractTag(block, "title");
-    // Atom: <link href="..."/>
+    let title = extractTag(block, "title");
     const linkMatch = block.match(/<link[^>]*href=["']([^"']+)["']/i);
     const link = linkMatch ? linkMatch[1] : extractTag(block, "link");
     const pubDate = extractTag(block, "updated") || extractTag(block, "published");
     const description = extractTag(block, "summary") || extractTag(block, "content");
+    title = stripSuffix(title);
     if (title) items.push({ title, link, pubDate, description, source });
   }
 
