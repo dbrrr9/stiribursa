@@ -547,3 +547,128 @@ export const getNewsItem = createServerFn({ method: "POST" })
     }
     return { item };
   });
+
+// ============================================================================
+// CUSTOM NEWS ANALYSIS — utilizatorul lipește un URL sau text și AI explică
+// ============================================================================
+const customAnalyzeSchema = z.object({
+  input: z.string().min(10).max(8000),
+});
+
+export const analyzeCustomNews = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => customAnalyzeSchema.parse(data))
+  .handler(
+    async ({
+      data,
+    }): Promise<{
+      analysis: ArticleAnalysis | null;
+      title: string;
+      sourceLabel: string;
+      error?: string;
+    }> => {
+      const raw = data.input.trim();
+      const isUrl = /^https?:\/\/\S+$/i.test(raw);
+
+      let title = "Știre furnizată de utilizator";
+      let bodyText = raw;
+      let sourceLabel = "Sursă utilizator";
+
+      // Dacă e URL, încercăm să extragem titlul + primele paragrafe
+      if (isUrl) {
+        try {
+          const urlObj = new URL(raw);
+          sourceLabel = urlObj.hostname.replace(/^www\./, "");
+          const r = await fetch(raw, {
+            headers: {
+              "User-Agent":
+                "Mozilla/5.0 (compatible; CapitalTermBot/1.0; +https://capital-term.app)",
+              Accept: "text/html,application/xhtml+xml",
+            },
+            signal: AbortSignal.timeout(8000),
+          });
+          if (r.ok) {
+            const html = await r.text();
+            const titleMatch =
+              html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i) ||
+              html.match(/<title[^>]*>([^<]+)<\/title>/i);
+            if (titleMatch) title = decodeEntities(titleMatch[1]).slice(0, 200);
+
+            const descMatch =
+              html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i) ||
+              html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i);
+            const desc = descMatch ? decodeEntities(descMatch[1]) : "";
+
+            // Extragem primele <p>...</p> ca context suplimentar
+            const paragraphs = (html.match(/<p[^>]*>([\s\S]*?)<\/p>/gi) ?? [])
+              .map((p) => decodeEntities(p))
+              .filter((t) => t.length > 60)
+              .slice(0, 8)
+              .join("\n\n");
+
+            bodyText = [title, desc, paragraphs].filter(Boolean).join("\n\n").slice(0, 6000);
+            if (bodyText.length < 80) bodyText = `${title}\n${desc || raw}`;
+          } else {
+            bodyText = `Nu am putut accesa URL-ul (${r.status}). Te rog lipește textul știrii direct.`;
+            return {
+              analysis: null,
+              title,
+              sourceLabel,
+              error: `Nu pot accesa URL-ul (status ${r.status}). Lipește textul știrii direct.`,
+            };
+          }
+        } catch (e) {
+          return {
+            analysis: null,
+            title,
+            sourceLabel,
+            error: `Nu pot accesa URL-ul: ${e instanceof Error ? e.message : "eroare necunoscută"}. Lipește textul știrii direct.`,
+          };
+        }
+      } else {
+        // E text liber — primul rând devine titlu
+        const firstLine = raw.split("\n")[0].trim();
+        if (firstLine.length > 8 && firstLine.length < 200) title = firstLine;
+      }
+
+      if (!process.env.LOVABLE_API_KEY) {
+        return {
+          analysis: fallbackAnalysis({ title, source: sourceLabel, summary: bodyText.slice(0, 300) }),
+          title,
+          sourceLabel,
+          error: "AI-ul nu este configurat. Afișăm o analiză de bază.",
+        };
+      }
+
+      const sys = `Ești un analist financiar senior care explică știri de piață pentru investitori români. Scrii în limba română, clar, profesionist, fără clickbait. Folosești paragrafe scurte. Când apar termeni tehnici (yield, basis points, hawkish, dovish, FOMC, EBITDA), îi explici scurt în paranteză. Te concentrezi pe IMPACT REAL asupra piețelor: acțiuni, obligațiuni, FX, mărfuri, crypto.`;
+
+      const usr = `Analizează următoarea știre furnizată de utilizator și produ o explicație completă pentru un investitor român. Identifică singur tema, regiunea și piețele afectate.
+
+SURSĂ: ${sourceLabel}
+TITLU: ${title}
+
+CONȚINUT:
+${bodyText}
+
+Generează o analiză completă urmând schema cerută. Dacă textul nu este o știre financiară clară, oferă oricum cel mai bun context posibil despre eventualul impact pe piețe.`;
+
+      try {
+        const result = (await callAI(usr, sys, ANALYSIS_SCHEMA)) as ArticleAnalysis | null;
+        if (result) {
+          return { analysis: result, title, sourceLabel };
+        }
+        return {
+          analysis: fallbackAnalysis({ title, source: sourceLabel, summary: bodyText.slice(0, 300) }),
+          title,
+          sourceLabel,
+        };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "unknown";
+        const fb = fallbackAnalysis({ title, source: sourceLabel, summary: bodyText.slice(0, 300) });
+        if (msg.includes("429"))
+          return { analysis: fb, title, sourceLabel, error: "Prea multe cereri AI. Încearcă din nou în câteva secunde." };
+        if (msg.includes("402"))
+          return { analysis: fb, title, sourceLabel, error: "Credite AI epuizate. Adaugă credite în Settings → Workspace → Usage." };
+        return { analysis: fb, title, sourceLabel, error: "Eroare AI. Afișăm o analiză de bază." };
+      }
+    },
+  );
