@@ -372,20 +372,41 @@ export const fetchLatestNews = createServerFn({ method: "GET" }).handler(async (
       .filter((x): x is NewsItem => x !== null);
 
     if (classified.length >= 5) {
-      // Sort by impact + relevance + recency
-      classified.sort((a, b) => {
-        const w = { high: 3, medium: 2, low: 1 } as const;
-        const score = (n: NewsItem) =>
-          w[n.impact] * 30 +
-          n.relevanceScore -
-          (Date.now() - new Date(n.publishedAt).getTime()) / (1000 * 60 * 60);
-        return score(b) - score(a);
-      });
+      const w = { high: 3, medium: 2, low: 1 } as const;
+      const scoreOf = (n: NewsItem) =>
+        w[n.impact] * 30 +
+        n.relevanceScore -
+        (Date.now() - new Date(n.publishedAt).getTime()) / (1000 * 60 * 60);
 
-      // Limităm la primele ~60 ca să nu copleșim UI-ul
-      const items = classified.slice(0, 60);
-      newsCache = { items, ts: Date.now() };
-      return { items, cached: false, source: "live" as const };
+      classified.sort((a, b) => scoreOf(b) - scoreOf(a));
+
+      // QUOTA: ~75% Reuters/Bloomberg/Yahoo, restul doar high/medium impact
+      const PRIMARY = new Set<NewsSource>(["Reuters", "Bloomberg", "Yahoo Finance"]);
+      const primaryItems = classified.filter((n) => PRIMARY.has(n.source));
+      const secondaryItems = classified.filter(
+        (n) => !PRIMARY.has(n.source) && n.impact !== "low",
+      );
+
+      const primaryQuota = Math.round(TARGET_TOTAL * PRIMARY_QUOTA);
+      const items: NewsItem[] = [
+        ...primaryItems.slice(0, primaryQuota),
+        ...secondaryItems.slice(0, TARGET_TOTAL - Math.min(primaryQuota, primaryItems.length)),
+      ];
+
+      // Dacă lipsesc primarele, completăm cu secundare
+      if (items.length < TARGET_TOTAL) {
+        const have = new Set(items.map((n) => n.id));
+        for (const n of classified) {
+          if (items.length >= TARGET_TOTAL) break;
+          if (!have.has(n.id)) items.push(n);
+        }
+      }
+
+      // Re-sortare finală pentru a păstra ordinea după scor
+      items.sort((a, b) => scoreOf(b) - scoreOf(a));
+
+      newsCache = { items: items.slice(0, TARGET_TOTAL), ts: Date.now() };
+      return { items: newsCache.items, cached: false, source: "live" as const };
     }
   } catch (e) {
     console.error("RSS aggregation failed:", e);
