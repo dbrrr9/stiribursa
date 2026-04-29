@@ -4,7 +4,7 @@ import { TerminalHeader } from "@/components/terminal/header";
 export const Route = createFileRoute("/about")({
   head: () => ({
     meta: [
-      { title: "Despre — CAPITAL::TERM" },
+      { title: "Despre — MarketScope" },
       { name: "description", content: "Cum funcționează terminalul de știri financiare." },
     ],
   }),
@@ -16,10 +16,10 @@ function About() {
     <div className="terminal-root min-h-screen">
       <TerminalHeader />
       <main className="mx-auto max-w-3xl px-4 sm:px-6 py-10 space-y-6">
-        <h1 className="font-mono text-2xl text-phosphor glow-text-phosphor">// despre_capital_term</h1>
+        <h1 className="font-mono text-2xl text-phosphor glow-text-phosphor">// despre_marketscope</h1>
         <div className="terminal-card p-6 prose-terminal">
           <p>
-            <strong>CAPITAL::TERM</strong> este un terminal financiar editorial care agregă cele
+            <strong>MarketScope</strong> este un terminal financiar editorial care agregă cele
             mai relevante știri din <strong>Reuters</strong>, <strong>Bloomberg</strong> și{" "}
             <strong>Yahoo Finance</strong>, le filtrează prin lentila pieței de capital și le
             transformă în analize clare în limba română.

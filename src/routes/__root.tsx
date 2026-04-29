@@ -1,5 +1,6 @@
 import { Outlet, Link, createRootRouteWithContext, HeadContent, Scripts } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { PasswordGate } from "@/components/terminal/password-gate";
 
 import appCss from "../styles.css?url";
 
@@ -34,16 +35,15 @@ export const Route = createRootRouteWithContext<RouterContext>()({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Terminal Insight aggregates and explains financial news from top sources in a premium, retro-futuristic terminal interface." },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Terminal Insight aggregates and explains financial news from top sources in a premium, retro-futuristic terminal interface." },
+      { title: "MarketScope" },
+      { name: "description", content: "MarketScope agregă și explică știrile financiare de la Reuters, CNBC, MarketWatch și Yahoo Finance într-un terminal premium." },
+      { name: "author", content: "MarketScope" },
+      { property: "og:title", content: "MarketScope" },
+      { property: "og:description", content: "Terminal financiar premium — știrile care mișcă piețele, explicate clar." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
-      { name: "twitter:title", content: "Lovable App" },
-      { name: "twitter:description", content: "Terminal Insight aggregates and explains financial news from top sources in a premium, retro-futuristic terminal interface." },
+      { name: "twitter:title", content: "MarketScope" },
+      { name: "twitter:description", content: "Terminal financiar premium — știrile care mișcă piețele, explicate clar." },
       { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/bcf305e7-e7d0-4bc4-ba34-5da290b0e0b3/id-preview-936a4c89--0f56dadf-1c2a-45b2-bb25-4596477b0cfc.lovable.app-1777321526558.png" },
       { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/bcf305e7-e7d0-4bc4-ba34-5da290b0e0b3/id-preview-936a4c89--0f56dadf-1c2a-45b2-bb25-4596477b0cfc.lovable.app-1777321526558.png" },
     ],
@@ -77,7 +77,9 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   return (
     <QueryClientProvider client={queryClient}>
-      <Outlet />
+      <PasswordGate>
+        <Outlet />
+      </PasswordGate>
     </QueryClientProvider>
   );
 }
