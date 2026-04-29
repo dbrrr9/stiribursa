@@ -178,17 +178,17 @@
   }
 
   ::selection {
-    background: oklch(0.88 0.22 145 / 0.3);
-    color: oklch(0.98 0.01 150);
+    background: oklch(0.78 0.16 235 / 0.35);
+    color: oklch(0.98 0.01 230);
   }
 
   /* Scrollbar */
   ::-webkit-scrollbar { width: 10px; height: 10px; }
-  ::-webkit-scrollbar-track { background: oklch(0.14 0.012 150); }
+  ::-webkit-scrollbar-track { background: oklch(0.13 0.025 250); }
   ::-webkit-scrollbar-thumb {
-    background: oklch(0.3 0.04 150);
+    background: oklch(0.32 0.06 245);
     border-radius: 4px;
-    border: 2px solid oklch(0.14 0.012 150);
+    border: 2px solid oklch(0.13 0.025 250);
   }
   ::-webkit-scrollbar-thumb:hover { background: var(--phosphor-dim); }
 }
