@@ -550,56 +550,101 @@ export const analyzeCustomNews = createServerFn({ method: "POST" })
       let bodyText = raw;
       let sourceLabel = "Sursă utilizator";
 
-      // Dacă e URL, încercăm să extragem titlul + primele paragrafe
+      // Dacă e URL, încercăm: 1) fetch direct, 2) fallback prin r.jina.ai (text reader proxy)
       if (isUrl) {
         try {
           const urlObj = new URL(raw);
           sourceLabel = urlObj.hostname.replace(/^www\./, "");
-          const r = await fetch(raw, {
-            headers: {
-              "User-Agent":
-                "Mozilla/5.0 (compatible; CapitalTermBot/1.0; +https://capital-term.app)",
-              Accept: "text/html,application/xhtml+xml",
-            },
-            signal: AbortSignal.timeout(8000),
-          });
-          if (r.ok) {
-            const html = await r.text();
-            const titleMatch =
-              html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i) ||
-              html.match(/<title[^>]*>([^<]+)<\/title>/i);
-            if (titleMatch) title = decodeEntities(titleMatch[1]).slice(0, 200);
-
-            const descMatch =
-              html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i) ||
-              html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i);
-            const desc = descMatch ? decodeEntities(descMatch[1]) : "";
-
-            // Extragem primele <p>...</p> ca context suplimentar
-            const paragraphs = (html.match(/<p[^>]*>([\s\S]*?)<\/p>/gi) ?? [])
-              .map((p) => decodeEntities(p))
-              .filter((t) => t.length > 60)
-              .slice(0, 8)
-              .join("\n\n");
-
-            bodyText = [title, desc, paragraphs].filter(Boolean).join("\n\n").slice(0, 6000);
-            if (bodyText.length < 80) bodyText = `${title}\n${desc || raw}`;
-          } else {
-            bodyText = `Nu am putut accesa URL-ul (${r.status}). Te rog lipește textul știrii direct.`;
-            return {
-              analysis: null,
-              title,
-              sourceLabel,
-              error: `Nu pot accesa URL-ul (status ${r.status}). Lipește textul știrii direct.`,
-            };
-          }
-        } catch (e) {
+        } catch {
           return {
             analysis: null,
             title,
             sourceLabel,
-            error: `Nu pot accesa URL-ul: ${e instanceof Error ? e.message : "eroare necunoscută"}. Lipește textul știrii direct.`,
+            error: "URL invalid. Verifică linkul sau lipește textul știrii direct.",
           };
+        }
+
+        const tryDirect = async (): Promise<string | null> => {
+          try {
+            const r = await fetch(raw, {
+              headers: {
+                "User-Agent":
+                  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+                Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9,ro;q=0.8",
+              },
+              signal: AbortSignal.timeout(9000),
+              redirect: "follow",
+            });
+            if (!r.ok) return null;
+            return await r.text();
+          } catch {
+            return null;
+          }
+        };
+
+        const tryReaderProxy = async (): Promise<string | null> => {
+          // r.jina.ai întoarce conținutul ca markdown curat — bypass paywall/blocaje user-agent
+          try {
+            const proxied = `https://r.jina.ai/${raw}`;
+            const r = await fetch(proxied, {
+              headers: {
+                "User-Agent": "Mozilla/5.0 CapitalTerm/1.0",
+                Accept: "text/plain, text/markdown, */*",
+              },
+              signal: AbortSignal.timeout(12000),
+            });
+            if (!r.ok) return null;
+            const md = await r.text();
+            return md && md.length > 100 ? md : null;
+          } catch {
+            return null;
+          }
+        };
+
+        const html = await tryDirect();
+        if (html) {
+          const titleMatch =
+            html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i) ||
+            html.match(/<title[^>]*>([^<]+)<\/title>/i);
+          if (titleMatch) title = decodeEntities(titleMatch[1]).slice(0, 200);
+
+          const descMatch =
+            html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i) ||
+            html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i);
+          const desc = descMatch ? decodeEntities(descMatch[1]) : "";
+
+          const paragraphs = (html.match(/<p[^>]*>([\s\S]*?)<\/p>/gi) ?? [])
+            .map((p) => decodeEntities(p))
+            .filter((t) => t.length > 60)
+            .slice(0, 12)
+            .join("\n\n");
+
+          bodyText = [title, desc, paragraphs].filter(Boolean).join("\n\n").slice(0, 7000);
+        }
+
+        // Dacă fetch direct a eșuat sau a întors prea puțin text, încercăm proxy
+        if (!html || bodyText.length < 200) {
+          const md = await tryReaderProxy();
+          if (md) {
+            // Primul rând non-gol = titlu probabil
+            const lines = md
+              .split("\n")
+              .map((l) => l.replace(/^#+\s*/, "").trim())
+              .filter(Boolean);
+            if (lines[0] && lines[0].length > 8 && lines[0].length < 220) {
+              title = lines[0];
+            }
+            bodyText = md.slice(0, 7000);
+          } else if (!html) {
+            return {
+              analysis: null,
+              title,
+              sourceLabel,
+              error:
+                "Nu pot accesa URL-ul (probabil are paywall sau blochează scraperele). Lipește direct textul știrii în câmpul de mai sus.",
+            };
+          }
         }
       } else {
         // E text liber — primul rând devine titlu
