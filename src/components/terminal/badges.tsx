@@ -44,8 +44,6 @@ const SOURCE_CODES: Record<NewsSource, string> = {
   "Yahoo Finance": "YHOO",
   CNBC: "CNBC",
   MarketWatch: "MKTW",
-  "Financial Times": "FT",
-  "Investing.com": "INVG",
 };
 
 export function SourceBadge({ source }: { source: NewsSource }) {
