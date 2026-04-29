@@ -129,9 +129,10 @@ function HomePage() {
             <span className="blink-cursor" />
           </h1>
           <p className="text-muted-foreground text-sm sm:text-base max-w-2xl leading-relaxed">
-            Agregăm Reuters, Bloomberg și Yahoo Finance. Filtrăm doar ce contează pentru piața de
-            capital. La un click, transformăm fiecare știre într-o analiză simplă: ce s-a întâmplat,
-            de ce contează, ce impact poate avea pe acțiuni, obligațiuni, FX și mărfuri.
+            Agregăm Reuters, CNBC, MarketWatch, Yahoo Finance și Bloomberg. Filtrăm doar ce contează
+            cu adevărat pentru piața de capital. La un click, fiecare știre devine o analiză clară:
+            ce s-a întâmplat, de ce contează, ce impact poate avea pe acțiuni, obligațiuni, FX și
+            mărfuri.
           </p>
         </section>
 
@@ -141,57 +142,21 @@ function HomePage() {
         {/* FILTERS */}
         <FilterBar state={filterState} onChange={setFilter} totalCount={filtered.length} />
 
-        {/* MOST IMPORTANT TODAY */}
-        {!isLoading && topMover && (
-          <section className="space-y-3">
-            <SectionHeader
-              icon={<Flame className="h-3.5 w-3.5" />}
-              label="MOST IMPORTANT TODAY"
-              accent="impact-high"
-            />
-            <NewsCard item={topMover} index={0} />
-          </section>
-        )}
-
-        {/* POTENTIAL MARKET MOVERS */}
-        {!isLoading && movers.length > 0 && (
-          <section className="space-y-3">
-            <SectionHeader
-              icon={<Zap className="h-3.5 w-3.5" />}
-              label="POTENTIAL MARKET MOVERS"
-              accent="amber"
-            />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-              {movers.map((n, i) => (
-                <NewsCard key={n.id} item={n} index={i + 1} />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* LATEST HIGH-IMPACT */}
-        {!isLoading && highImpact.length > 0 && (
-          <section className="space-y-3">
-            <SectionHeader
-              icon={<Sparkles className="h-3.5 w-3.5" />}
-              label="LATEST HIGH-IMPACT HEADLINES"
-              accent="cyan"
-            />
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-              {highImpact.map((n, i) => (
-                <NewsCard key={n.id} item={n} index={i + 5} />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* ALL FEED */}
+        {/* MARKET FEED — singura listă, ordonată implicit cronologic */}
         <section className="space-y-3">
-          <SectionHeader
-            icon={<span className="font-mono text-[10px]">▸</span>}
-            label={`MARKET FEED · ${filtered.length} știri`}
-            accent="phosphor"
-          />
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-sm border border-phosphor/40 text-phosphor bg-phosphor/5">
+              <span className="font-mono text-[10px]">▸</span>
+              <span className="font-mono text-[10px] uppercase tracking-[0.15em] font-semibold">
+                MARKET FEED · {filtered.length} știri
+              </span>
+            </div>
+            <span className="h-px flex-1 bg-gradient-to-r from-border to-transparent" />
+            <span className="font-mono text-[10px] text-muted-foreground hidden sm:inline">
+              {filterState.sort === "newest" ? "ORDONATE: CRONOLOGIC" : "ORDONATE: RELEVANȚĂ"}
+            </span>
+          </div>
+
           {isLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {Array.from({ length: 6 }).map((_, i) => (
@@ -199,7 +164,11 @@ function HomePage() {
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <EmptyState onReset={() => setFilter({ q: "", sources: [], themes: [], impacts: [], sort: filterState.sort })} />
+            <EmptyState
+              onReset={() =>
+                setFilter({ q: "", sources: [], themes: [], impacts: [], sort: filterState.sort })
+              }
+            />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
               {filtered.map((n, i) => (
@@ -210,9 +179,26 @@ function HomePage() {
         </section>
 
         <footer className="pt-8 pb-4 text-center font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-          CAPITAL::TERM v1.0 · agregat din Reuters · Bloomberg · Yahoo Finance · explicații AI în română
+          CAPITAL::TERM v1.0 · Reuters · CNBC · MarketWatch · Yahoo Finance · Bloomberg · explicații AI în română
         </footer>
       </main>
+    </div>
+  );
+}
+
+function EmptyState({ onReset }: { onReset: () => void }) {
+  return (
+    <div className="terminal-card p-12 text-center">
+      <div className="font-mono text-phosphor mb-2">// no_results.txt</div>
+      <p className="text-muted-foreground mb-4">
+        Niciun rezultat pentru filtrele curente.
+      </p>
+      <button
+        onClick={onReset}
+        className="font-mono text-xs uppercase tracking-wider px-4 py-2 rounded-sm border border-phosphor/60 text-phosphor hover:bg-phosphor/10 transition-colors"
+      >
+        ▸ resetează filtrele
+      </button>
     </div>
   );
 }
