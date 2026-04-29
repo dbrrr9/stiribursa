@@ -14,10 +14,10 @@ export function TerminalHeader() {
             </div>
             <div className="flex items-baseline gap-1.5">
               <span className="font-mono text-base font-bold tracking-tight text-foreground glow-text-phosphor">
-                CAPITAL
+                MARKET
               </span>
               <span className="font-mono text-base font-bold tracking-tight text-phosphor glow-text-phosphor">
-                ::TERM
+                ::SCOPE
               </span>
             </div>
           </Link>

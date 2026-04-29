@@ -23,13 +23,13 @@ export const Route = createFileRoute("/")({
   validateSearch: zodValidator(searchSchema),
   head: () => ({
     meta: [
-      { title: "CAPITAL::TERM — Terminal de știri pentru piața de capital" },
+      { title: "MarketScope — Terminal de știri pentru piața de capital" },
       {
         name: "description",
         content:
           "Agregator premium de știri Reuters, Bloomberg și Yahoo Finance, filtrate și explicate pentru investitori. Înțelegi rapid ce s-a întâmplat și ce impact are pe piețe.",
       },
-      { property: "og:title", content: "CAPITAL::TERM — Terminal financiar" },
+      { property: "og:title", content: "MarketScope — Terminal financiar" },
       {
         property: "og:description",
         content: "Cele mai relevante știri pentru piața de capital, explicate clar.",
@@ -179,7 +179,7 @@ function HomePage() {
         </section>
 
         <footer className="pt-8 pb-4 text-center font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-          CAPITAL::TERM v1.0 · Reuters · CNBC · MarketWatch · Yahoo Finance · Bloomberg · explicații AI în română
+          MARKETSCOPE v1.0 · Reuters · CNBC · MarketWatch · Yahoo Finance · Bloomberg · explicații AI în română
         </footer>
       </main>
     </div>

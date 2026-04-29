@@ -13,12 +13,12 @@ export const Route = createFileRoute("/article/$id")({
     const item = loaderData?.item;
     return {
       meta: [
-        { title: item ? `${item.title} — CAPITAL::TERM` : "Știre — CAPITAL::TERM" },
+        { title: item ? `${item.title} — MarketScope` : "Știre — MarketScope" },
         {
           name: "description",
           content: item?.summary ?? "Analiză știre piață de capital.",
         },
-        { property: "og:title", content: item?.title ?? "CAPITAL::TERM" },
+        { property: "og:title", content: item?.title ?? "MarketScope" },
         { property: "og:description", content: item?.summary ?? "" },
       ],
     };
