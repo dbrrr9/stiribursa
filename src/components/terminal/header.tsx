@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
-import { Activity } from "lucide-react";
 import { LiveClock } from "./clock";
+import logoUrl from "/favicon-source.png?url";
 
 export function TerminalHeader() {
   return (
@@ -8,8 +8,8 @@ export function TerminalHeader() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         <div className="flex h-14 items-center justify-between gap-4">
           <Link to="/" className="group flex items-center gap-2.5">
-            <div className="relative flex h-8 w-8 items-center justify-center rounded-sm border border-phosphor/40 bg-phosphor/10 group-hover:bg-phosphor/20 transition-colors">
-              <Activity className="h-4 w-4 text-phosphor glow-text-phosphor" strokeWidth={2.5} />
+            <div className="relative flex h-8 w-8 items-center justify-center rounded-sm border border-phosphor/40 bg-phosphor/10 group-hover:bg-phosphor/20 transition-colors overflow-hidden">
+              <img src={logoUrl} alt="MarketScope" width={32} height={32} className="h-full w-full object-contain" />
               <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-phosphor pulse-dot" />
             </div>
             <div className="flex items-baseline gap-1.5">
