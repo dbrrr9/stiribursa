@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 
-const STORAGE_KEY = "ms_gate_ok";
+const STORAGE_KEY = "ms_gate_expiry";
 const PASSWORD = "dbrnews";
+const TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14 zile
 
 export function PasswordGate({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
@@ -11,8 +12,16 @@ export function PasswordGate({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     try {
-      if (typeof window !== "undefined" && sessionStorage.getItem(STORAGE_KEY) === "1") {
-        setUnlocked(true);
+      if (typeof window !== "undefined") {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const expiry = parseInt(raw, 10);
+          if (Number.isFinite(expiry) && expiry > Date.now()) {
+            setUnlocked(true);
+          } else {
+            localStorage.removeItem(STORAGE_KEY);
+          }
+        }
       }
     } catch {}
     setReady(true);
@@ -24,7 +33,7 @@ export function PasswordGate({ children }: { children: React.ReactNode }) {
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (value === PASSWORD) {
-      try { sessionStorage.setItem(STORAGE_KEY, "1"); } catch {}
+      try { localStorage.setItem(STORAGE_KEY, String(Date.now() + TTL_MS)); } catch {}
       setUnlocked(true);
     } else {
       setError(true);
