@@ -9,8 +9,6 @@ const SOURCES: NewsSource[] = [
   "Yahoo Finance",
   "CNBC",
   "MarketWatch",
-  "Financial Times",
-  "Investing.com",
 ];
 const THEMES: ThemeTag[] = [
   "actiuni",

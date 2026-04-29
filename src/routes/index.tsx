@@ -10,14 +10,13 @@ import { NewsCard, NewsCardSkeleton } from "@/components/terminal/news-card";
 import { fetchLatestNews } from "@/lib/news.functions";
 import { CustomAnalyzer } from "@/components/terminal/custom-analyzer";
 import type { NewsSource, ThemeTag, ImpactLevel } from "@/lib/news-types";
-import { Zap, Flame, Sparkles } from "lucide-react";
 
 const searchSchema = z.object({
   q: fallback(z.string(), "").default(""),
   src: fallback(z.array(z.string()), []).default([]),
   th: fallback(z.array(z.string()), []).default([]),
   imp: fallback(z.array(z.string()), []).default([]),
-  sort: fallback(z.enum(["relevance", "newest"]), "relevance").default("relevance"),
+  sort: fallback(z.enum(["relevance", "newest"]), "newest").default("newest"),
 });
 
 export const Route = createFileRoute("/")({
@@ -130,9 +129,10 @@ function HomePage() {
             <span className="blink-cursor" />
           </h1>
           <p className="text-muted-foreground text-sm sm:text-base max-w-2xl leading-relaxed">
-            Agregăm Reuters, Bloomberg și Yahoo Finance. Filtrăm doar ce contează pentru piața de
-            capital. La un click, transformăm fiecare știre într-o analiză simplă: ce s-a întâmplat,
-            de ce contează, ce impact poate avea pe acțiuni, obligațiuni, FX și mărfuri.
+            Agregăm Reuters, CNBC, MarketWatch, Yahoo Finance și Bloomberg. Filtrăm doar ce contează
+            cu adevărat pentru piața de capital. La un click, fiecare știre devine o analiză clară:
+            ce s-a întâmplat, de ce contează, ce impact poate avea pe acțiuni, obligațiuni, FX și
+            mărfuri.
           </p>
         </section>
 
@@ -142,57 +142,21 @@ function HomePage() {
         {/* FILTERS */}
         <FilterBar state={filterState} onChange={setFilter} totalCount={filtered.length} />
 
-        {/* MOST IMPORTANT TODAY */}
-        {!isLoading && topMover && (
-          <section className="space-y-3">
-            <SectionHeader
-              icon={<Flame className="h-3.5 w-3.5" />}
-              label="MOST IMPORTANT TODAY"
-              accent="impact-high"
-            />
-            <NewsCard item={topMover} index={0} />
-          </section>
-        )}
-
-        {/* POTENTIAL MARKET MOVERS */}
-        {!isLoading && movers.length > 0 && (
-          <section className="space-y-3">
-            <SectionHeader
-              icon={<Zap className="h-3.5 w-3.5" />}
-              label="POTENTIAL MARKET MOVERS"
-              accent="amber"
-            />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-              {movers.map((n, i) => (
-                <NewsCard key={n.id} item={n} index={i + 1} />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* LATEST HIGH-IMPACT */}
-        {!isLoading && highImpact.length > 0 && (
-          <section className="space-y-3">
-            <SectionHeader
-              icon={<Sparkles className="h-3.5 w-3.5" />}
-              label="LATEST HIGH-IMPACT HEADLINES"
-              accent="cyan"
-            />
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-              {highImpact.map((n, i) => (
-                <NewsCard key={n.id} item={n} index={i + 5} />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* ALL FEED */}
+        {/* MARKET FEED — singura listă, ordonată implicit cronologic */}
         <section className="space-y-3">
-          <SectionHeader
-            icon={<span className="font-mono text-[10px]">▸</span>}
-            label={`MARKET FEED · ${filtered.length} știri`}
-            accent="phosphor"
-          />
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-sm border border-phosphor/40 text-phosphor bg-phosphor/5">
+              <span className="font-mono text-[10px]">▸</span>
+              <span className="font-mono text-[10px] uppercase tracking-[0.15em] font-semibold">
+                MARKET FEED · {filtered.length} știri
+              </span>
+            </div>
+            <span className="h-px flex-1 bg-gradient-to-r from-border to-transparent" />
+            <span className="font-mono text-[10px] text-muted-foreground hidden sm:inline">
+              {filterState.sort === "newest" ? "ORDONATE: CRONOLOGIC" : "ORDONATE: RELEVANȚĂ"}
+            </span>
+          </div>
+
           {isLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {Array.from({ length: 6 }).map((_, i) => (
@@ -200,7 +164,11 @@ function HomePage() {
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <EmptyState onReset={() => setFilter({ q: "", sources: [], themes: [], impacts: [], sort: filterState.sort })} />
+            <EmptyState
+              onReset={() =>
+                setFilter({ q: "", sources: [], themes: [], impacts: [], sort: filterState.sort })
+              }
+            />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
               {filtered.map((n, i) => (
@@ -211,37 +179,9 @@ function HomePage() {
         </section>
 
         <footer className="pt-8 pb-4 text-center font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-          CAPITAL::TERM v1.0 · agregat din Reuters · Bloomberg · Yahoo Finance · explicații AI în română
+          CAPITAL::TERM v1.0 · Reuters · CNBC · MarketWatch · Yahoo Finance · Bloomberg · explicații AI în română
         </footer>
       </main>
-    </div>
-  );
-}
-
-function SectionHeader({
-  icon,
-  label,
-  accent,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  accent: "phosphor" | "cyan" | "amber" | "impact-high";
-}) {
-  const colorMap = {
-    phosphor: "text-phosphor border-phosphor/40",
-    cyan: "text-cyan border-cyan/40",
-    amber: "text-amber border-amber/40",
-    "impact-high": "text-impact-high border-impact-high/40",
-  };
-  return (
-    <div className="flex items-center gap-3">
-      <div className={`flex items-center gap-1.5 px-2 py-1 rounded-sm border ${colorMap[accent]} bg-current/5`}>
-        <span className={colorMap[accent].split(" ")[0]}>{icon}</span>
-        <span className={`font-mono text-[10px] uppercase tracking-[0.15em] font-semibold ${colorMap[accent].split(" ")[0]}`}>
-          {label}
-        </span>
-      </div>
-      <span className="h-px flex-1 bg-gradient-to-r from-border to-transparent" />
     </div>
   );
 }

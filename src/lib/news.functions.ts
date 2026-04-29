@@ -20,50 +20,47 @@ const CACHE_TTL_MS = 1000 * 60 * 10; // 10 min
 const analysisCache = new Map<string, ArticleAnalysis>();
 
 // ============================================================================
-// RSS FEEDS — surse publice, fără API key
-// Reuters & Bloomberg sunt agregate prin Google News (RSS public, gratuit, legal)
-// pentru că ambele și-au închis feed-urile RSS oficiale.
+// RSS FEEDS — surse permise: Reuters, CNBC, MarketWatch, Yahoo Finance.
+// Bloomberg păstrat ca extra premium (high-impact only).
 // ============================================================================
-// "primary" = Reuters, Bloomberg, Yahoo — cota 70-80% din feed
-// "secondary" = restul (CNBC, MarketWatch, FT, Investing) — folosite doar
-// pentru a completa cu știri de impact înalt când lipsesc primarele.
 type FeedTier = "primary" | "secondary";
 const RSS_FEEDS: { source: NewsSource; url: string; tier: FeedTier }[] = [
-  // === PRIMARY (target ~75%) ===
-  // Reuters via Google News — markets/business/economy
+  // === PRIMARY ===
+  // Reuters via Google News (RSS oficial Reuters închis)
   {
     source: "Reuters",
     url: "https://news.google.com/rss/search?q=site:reuters.com+(markets+OR+stocks+OR+economy+OR+fed+OR+earnings)&hl=en-US&gl=US&ceid=US:en",
     tier: "primary",
   },
-  // Bloomberg via Google News
-  {
-    source: "Bloomberg",
-    url: "https://news.google.com/rss/search?q=site:bloomberg.com+(markets+OR+stocks+OR+economy+OR+fed+OR+earnings)&hl=en-US&gl=US&ceid=US:en",
-    tier: "primary",
-  },
-  // Yahoo Finance — feed direct, încă funcțional
+  // Yahoo Finance — feed direct
   {
     source: "Yahoo Finance",
     url: "https://finance.yahoo.com/news/rssindex",
     tier: "primary",
   },
-  // Yahoo Finance via Google News (back-up + breadth)
   {
     source: "Yahoo Finance",
     url: "https://news.google.com/rss/search?q=site:finance.yahoo.com+(markets+OR+stocks+OR+earnings)&hl=en-US&gl=US&ceid=US:en",
     tier: "primary",
   },
+  // CNBC — markets
+  { source: "CNBC", url: "https://www.cnbc.com/id/10000664/device/rss/rss.html", tier: "primary" },
+  // MarketWatch — top stories
+  { source: "MarketWatch", url: "https://feeds.content.dowjones.io/public/rss/mw_topstories", tier: "primary" },
 
-  // === SECONDARY (umplem doar restul de ~25%, doar high/medium impact) ===
-  { source: "CNBC", url: "https://www.cnbc.com/id/10000664/device/rss/rss.html", tier: "secondary" },
-  { source: "MarketWatch", url: "https://feeds.content.dowjones.io/public/rss/mw_topstories", tier: "secondary" },
-  { source: "Financial Times", url: "https://www.ft.com/markets?format=rss", tier: "secondary" },
+  // === SECONDARY (Bloomberg — doar high-impact) ===
+  {
+    source: "Bloomberg",
+    url: "https://news.google.com/rss/search?q=site:bloomberg.com+(markets+OR+stocks+OR+economy+OR+fed+OR+earnings)&hl=en-US&gl=US&ceid=US:en",
+    tier: "secondary",
+  },
 ];
 
-// % minim pentru sursele primare (Reuters + Bloomberg + Yahoo)
-const PRIMARY_QUOTA = 0.75;
-const TARGET_TOTAL = 60;
+const TARGET_TOTAL = 50;
+// Vârstă maximă acceptată (24h) — feedul e despre "ce se întâmplă acum"
+const MAX_AGE_MS = 1000 * 60 * 60 * 24;
+// Scor minim de relevanță pentru a apărea în feed
+const MIN_RELEVANCE = 50;
 
 // ============================================================================
 // AI helper (opțional — folosit doar dacă LOVABLE_API_KEY e configurat)
@@ -367,46 +364,26 @@ export const fetchLatestNews = createServerFn({ method: "GET" }).handler(async (
     }
 
     // Classify + filter only financially-relevant
+    const now = Date.now();
     const classified = deduped
       .map((a, i) => classifyArticle(a, i))
-      .filter((x): x is NewsItem => x !== null);
+      .filter((x): x is NewsItem => x !== null)
+      // Vârstă maximă 24h
+      .filter((n) => now - new Date(n.publishedAt).getTime() <= MAX_AGE_MS)
+      // Doar high/medium impact + scor relevanță decent
+      .filter((n) => n.impact !== "low" && n.relevanceScore >= MIN_RELEVANCE)
+      // Bloomberg = secondary, doar high impact
+      .filter((n) => n.source !== "Bloomberg" || n.impact === "high");
 
     if (classified.length >= 5) {
-      const w = { high: 3, medium: 2, low: 1 } as const;
-      const scoreOf = (n: NewsItem) =>
-        w[n.impact] * 30 +
-        n.relevanceScore -
-        (Date.now() - new Date(n.publishedAt).getTime()) / (1000 * 60 * 60);
-
-      classified.sort((a, b) => scoreOf(b) - scoreOf(a));
-
-      // QUOTA: ~75% Reuters/Bloomberg/Yahoo, restul doar high/medium impact
-      const PRIMARY = new Set<NewsSource>(["Reuters", "Bloomberg", "Yahoo Finance"]);
-      const primaryItems = classified.filter((n) => PRIMARY.has(n.source));
-      const secondaryItems = classified.filter(
-        (n) => !PRIMARY.has(n.source) && n.impact !== "low",
+      // Sortare DEFAULT: cele mai noi sus
+      classified.sort(
+        (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
       );
 
-      const primaryQuota = Math.round(TARGET_TOTAL * PRIMARY_QUOTA);
-      const items: NewsItem[] = [
-        ...primaryItems.slice(0, primaryQuota),
-        ...secondaryItems.slice(0, TARGET_TOTAL - Math.min(primaryQuota, primaryItems.length)),
-      ];
-
-      // Dacă lipsesc primarele, completăm cu secundare
-      if (items.length < TARGET_TOTAL) {
-        const have = new Set(items.map((n) => n.id));
-        for (const n of classified) {
-          if (items.length >= TARGET_TOTAL) break;
-          if (!have.has(n.id)) items.push(n);
-        }
-      }
-
-      // Re-sortare finală pentru a păstra ordinea după scor
-      items.sort((a, b) => scoreOf(b) - scoreOf(a));
-
-      newsCache = { items: items.slice(0, TARGET_TOTAL), ts: Date.now() };
-      return { items: newsCache.items, cached: false, source: "live" as const };
+      const items = classified.slice(0, TARGET_TOTAL);
+      newsCache = { items, ts: Date.now() };
+      return { items, cached: false, source: "live" as const };
     }
   } catch (e) {
     console.error("RSS aggregation failed:", e);
@@ -573,56 +550,101 @@ export const analyzeCustomNews = createServerFn({ method: "POST" })
       let bodyText = raw;
       let sourceLabel = "Sursă utilizator";
 
-      // Dacă e URL, încercăm să extragem titlul + primele paragrafe
+      // Dacă e URL, încercăm: 1) fetch direct, 2) fallback prin r.jina.ai (text reader proxy)
       if (isUrl) {
         try {
           const urlObj = new URL(raw);
           sourceLabel = urlObj.hostname.replace(/^www\./, "");
-          const r = await fetch(raw, {
-            headers: {
-              "User-Agent":
-                "Mozilla/5.0 (compatible; CapitalTermBot/1.0; +https://capital-term.app)",
-              Accept: "text/html,application/xhtml+xml",
-            },
-            signal: AbortSignal.timeout(8000),
-          });
-          if (r.ok) {
-            const html = await r.text();
-            const titleMatch =
-              html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i) ||
-              html.match(/<title[^>]*>([^<]+)<\/title>/i);
-            if (titleMatch) title = decodeEntities(titleMatch[1]).slice(0, 200);
-
-            const descMatch =
-              html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i) ||
-              html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i);
-            const desc = descMatch ? decodeEntities(descMatch[1]) : "";
-
-            // Extragem primele <p>...</p> ca context suplimentar
-            const paragraphs = (html.match(/<p[^>]*>([\s\S]*?)<\/p>/gi) ?? [])
-              .map((p) => decodeEntities(p))
-              .filter((t) => t.length > 60)
-              .slice(0, 8)
-              .join("\n\n");
-
-            bodyText = [title, desc, paragraphs].filter(Boolean).join("\n\n").slice(0, 6000);
-            if (bodyText.length < 80) bodyText = `${title}\n${desc || raw}`;
-          } else {
-            bodyText = `Nu am putut accesa URL-ul (${r.status}). Te rog lipește textul știrii direct.`;
-            return {
-              analysis: null,
-              title,
-              sourceLabel,
-              error: `Nu pot accesa URL-ul (status ${r.status}). Lipește textul știrii direct.`,
-            };
-          }
-        } catch (e) {
+        } catch {
           return {
             analysis: null,
             title,
             sourceLabel,
-            error: `Nu pot accesa URL-ul: ${e instanceof Error ? e.message : "eroare necunoscută"}. Lipește textul știrii direct.`,
+            error: "URL invalid. Verifică linkul sau lipește textul știrii direct.",
           };
+        }
+
+        const tryDirect = async (): Promise<string | null> => {
+          try {
+            const r = await fetch(raw, {
+              headers: {
+                "User-Agent":
+                  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+                Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9,ro;q=0.8",
+              },
+              signal: AbortSignal.timeout(9000),
+              redirect: "follow",
+            });
+            if (!r.ok) return null;
+            return await r.text();
+          } catch {
+            return null;
+          }
+        };
+
+        const tryReaderProxy = async (): Promise<string | null> => {
+          // r.jina.ai întoarce conținutul ca markdown curat — bypass paywall/blocaje user-agent
+          try {
+            const proxied = `https://r.jina.ai/${raw}`;
+            const r = await fetch(proxied, {
+              headers: {
+                "User-Agent": "Mozilla/5.0 CapitalTerm/1.0",
+                Accept: "text/plain, text/markdown, */*",
+              },
+              signal: AbortSignal.timeout(12000),
+            });
+            if (!r.ok) return null;
+            const md = await r.text();
+            return md && md.length > 100 ? md : null;
+          } catch {
+            return null;
+          }
+        };
+
+        const html = await tryDirect();
+        if (html) {
+          const titleMatch =
+            html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i) ||
+            html.match(/<title[^>]*>([^<]+)<\/title>/i);
+          if (titleMatch) title = decodeEntities(titleMatch[1]).slice(0, 200);
+
+          const descMatch =
+            html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i) ||
+            html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i);
+          const desc = descMatch ? decodeEntities(descMatch[1]) : "";
+
+          const paragraphs = (html.match(/<p[^>]*>([\s\S]*?)<\/p>/gi) ?? [])
+            .map((p) => decodeEntities(p))
+            .filter((t) => t.length > 60)
+            .slice(0, 12)
+            .join("\n\n");
+
+          bodyText = [title, desc, paragraphs].filter(Boolean).join("\n\n").slice(0, 7000);
+        }
+
+        // Dacă fetch direct a eșuat sau a întors prea puțin text, încercăm proxy
+        if (!html || bodyText.length < 200) {
+          const md = await tryReaderProxy();
+          if (md) {
+            // Primul rând non-gol = titlu probabil
+            const lines = md
+              .split("\n")
+              .map((l) => l.replace(/^#+\s*/, "").trim())
+              .filter(Boolean);
+            if (lines[0] && lines[0].length > 8 && lines[0].length < 220) {
+              title = lines[0];
+            }
+            bodyText = md.slice(0, 7000);
+          } else if (!html) {
+            return {
+              analysis: null,
+              title,
+              sourceLabel,
+              error:
+                "Nu pot accesa URL-ul (probabil are paywall sau blochează scraperele). Lipește direct textul știrii în câmpul de mai sus.",
+            };
+          }
         }
       } else {
         // E text liber — primul rând devine titlu
