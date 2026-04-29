@@ -10,14 +10,13 @@ import { NewsCard, NewsCardSkeleton } from "@/components/terminal/news-card";
 import { fetchLatestNews } from "@/lib/news.functions";
 import { CustomAnalyzer } from "@/components/terminal/custom-analyzer";
 import type { NewsSource, ThemeTag, ImpactLevel } from "@/lib/news-types";
-import { Zap, Flame, Sparkles } from "lucide-react";
 
 const searchSchema = z.object({
   q: fallback(z.string(), "").default(""),
   src: fallback(z.array(z.string()), []).default([]),
   th: fallback(z.array(z.string()), []).default([]),
   imp: fallback(z.array(z.string()), []).default([]),
-  sort: fallback(z.enum(["relevance", "newest"]), "relevance").default("relevance"),
+  sort: fallback(z.enum(["relevance", "newest"]), "newest").default("newest"),
 });
 
 export const Route = createFileRoute("/")({
