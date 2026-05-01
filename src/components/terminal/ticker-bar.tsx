@@ -19,26 +19,18 @@ export function TickerBar({ items }: { items: NewsItem[] }) {
   const doubled = [...ticks, ...ticks];
 
   return (
-    <div className="relative overflow-hidden border-y border-border bg-terminal-surface/60 backdrop-blur">
+    <div className="relative overflow-hidden border-b border-border bg-card/60 backdrop-blur-sm">
       <div className="ticker-track py-2">
         {doubled.map((t, idx) => {
           const up = t.delta === "+";
           return (
-            <div
-              key={idx}
-              className="flex items-center gap-2 px-6 font-mono text-xs"
-            >
-              <span className="text-muted-foreground">{t.label}</span>
-              <span className="text-phosphor-dim tabular-nums">{t.count}</span>
-              <span
-                className={
-                  up ? "text-sentiment-positive tabular-nums" : "text-sentiment-negative tabular-nums"
-                }
-              >
-                {t.delta}
-                {t.pct}%
+            <div key={idx} className="flex items-center gap-2 px-5 text-xs">
+              <span className="text-muted-foreground font-medium">{t.label}</span>
+              <span className="text-foreground/60 tabular-nums">{t.count}</span>
+              <span className={up ? "text-sentiment-positive tabular-nums font-medium" : "text-sentiment-negative tabular-nums font-medium"}>
+                {t.delta}{t.pct}%
               </span>
-              <span className="text-border">│</span>
+              <span className="text-border">·</span>
             </div>
           );
         })}
