@@ -6,6 +6,7 @@ export type NewsSource =
   | "MarketWatch";
 export type ImpactLevel = "high" | "medium" | "low";
 export type Sentiment = "positive" | "negative" | "mixed" | "uncertain";
+export type NewsStatus = "breaking" | "developing" | "confirmed" | "low-relevance";
 export type ThemeTag =
   | "actiuni"
   | "obligatiuni"
@@ -29,20 +30,23 @@ export interface NewsItem {
   themes: ThemeTag[];
   impact: ImpactLevel;
   sentiment: Sentiment;
+  status: NewsStatus;
   regions: MarketRegion[];
   markets: string[]; // e.g. equities, bonds, FX, commodities
   sectors?: string[];
   relevanceScore: number; // 0-100
+  urgencyScore?: number; // 0-100
+  confidenceScore?: number; // 0-100
 }
 
 export interface ArticleAnalysis {
-  summarySimple: string; // explicat simplu
+  summarySimple: string;
   whyItMatters: string;
   shortTermImpact: string;
   mediumTermImpact: string;
   affectedMarkets: string;
   watchPoints: string[];
-  bottomLine: string[]; // 3-5 bullet
+  bottomLine: string[];
 }
 
 export const THEME_LABELS: Record<ThemeTag, string> = {
@@ -56,4 +60,11 @@ export const THEME_LABELS: Record<ThemeTag, string> = {
   earnings: "Earnings",
   "banci-centrale": "Bănci Centrale",
   geopolitica: "Geopolitică",
+};
+
+export const STATUS_LABELS: Record<NewsStatus, string> = {
+  breaking: "Breaking",
+  developing: "Developing",
+  confirmed: "Confirmed",
+  "low-relevance": "Low Relevance",
 };

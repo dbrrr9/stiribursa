@@ -15,7 +15,7 @@ export function LiveClock() {
 
   if (!now) {
     return (
-      <span className="font-mono text-xs text-muted-foreground tabular-nums">
+      <span className="text-xs text-muted-foreground tabular-nums">
         --:--:-- UTC
       </span>
     );
@@ -26,8 +26,8 @@ export function LiveClock() {
   const ss = pad(now.getUTCSeconds());
 
   return (
-    <span className="font-mono text-xs tabular-nums text-phosphor-dim">
-      {hh}:{mm}:<span className="text-phosphor">{ss}</span> UTC
+    <span className="text-xs tabular-nums text-muted-foreground">
+      {hh}:{mm}:<span className="text-foreground font-medium">{ss}</span> <span className="text-muted-foreground/60">UTC</span>
     </span>
   );
 }

@@ -1,37 +1,36 @@
 import { Link } from "@tanstack/react-router";
 import { LiveClock } from "./clock";
-import logoUrl from "/favicon-source.png?url";
+import { TrendingUp } from "lucide-react";
 
 export function TerminalHeader() {
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-terminal-bg/80 backdrop-blur-md">
+    <header className="sticky top-0 z-30 border-b border-border bg-card/80 backdrop-blur-lg">
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         <div className="flex h-14 items-center justify-between gap-4">
           <Link to="/" className="group flex items-center gap-2.5">
-            <div className="relative flex h-8 w-8 items-center justify-center rounded-sm border border-phosphor/40 bg-phosphor/10 group-hover:bg-phosphor/20 transition-colors overflow-hidden">
-              <img src={logoUrl} alt="MarketScope" width={32} height={32} className="h-full w-full object-contain" />
-              <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-phosphor pulse-dot" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+              <TrendingUp className="h-4.5 w-4.5" />
             </div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="font-mono text-base font-bold tracking-tight text-foreground glow-text-phosphor">
-                MARKET
+            <div className="flex items-baseline gap-0.5">
+              <span className="text-base font-bold tracking-tight text-foreground">
+                Market
               </span>
-              <span className="font-mono text-base font-bold tracking-tight text-phosphor glow-text-phosphor">
-                ::SCOPE
+              <span className="text-base font-bold tracking-tight text-teal">
+                Scope
               </span>
             </div>
           </Link>
 
           <nav className="hidden md:flex items-center gap-1">
-            <NavItem to="/" label="MARKET FEED" exact />
-            <NavItem to="/about" label="DESPRE" />
+            <NavItem to="/" label="Feed" exact />
+            <NavItem to="/about" label="Despre" />
           </nav>
 
           <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-sm border border-border bg-terminal-surface">
-              <span className="h-1.5 w-1.5 rounded-full bg-sentiment-positive pulse-dot" />
-              <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                LIVE
+            <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-md bg-sentiment-positive/10">
+              <span className="h-1.5 w-1.5 rounded-full bg-sentiment-positive animate-pulse" />
+              <span className="text-[11px] font-medium text-sentiment-positive">
+                Live
               </span>
             </div>
             <LiveClock />
@@ -47,8 +46,8 @@ function NavItem({ to, label, exact }: { to: string; label: string; exact?: bool
     <Link
       to={to}
       activeOptions={{ exact }}
-      className="font-mono text-xs uppercase tracking-wider px-3 py-1.5 rounded-sm text-muted-foreground hover:text-phosphor hover:bg-phosphor/5 transition-colors"
-      activeProps={{ className: "!text-phosphor bg-phosphor/10" }}
+      className="text-sm font-medium px-3 py-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+      activeProps={{ className: "!text-foreground !bg-muted" }}
     >
       {label}
     </Link>
