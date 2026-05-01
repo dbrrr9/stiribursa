@@ -285,6 +285,12 @@ function classifyArticle(raw: RawArticle, idx: number): NewsItem | null {
   if (themes.includes("marfuri")) markets.push("Commodities");
   if (themes.includes("crypto")) markets.push("Crypto");
 
+  // Status
+  const ageMs = Date.now() - new Date(raw.pubDate || Date.now()).getTime();
+  let status: NewsStatus = "confirmed";
+  if (ageMs < 1000 * 60 * 30 && impact === "high") status = "breaking";
+  else if (ageMs < 1000 * 60 * 120 && impact !== "low") status = "developing";
+
   // Relevance score: impact + theme breadth + freshness
   const impactScore = impact === "high" ? 80 : impact === "medium" ? 55 : 30;
   const themeBonus = Math.min(themes.length * 4, 15);
@@ -319,6 +325,7 @@ function classifyArticle(raw: RawArticle, idx: number): NewsItem | null {
     themes,
     impact,
     sentiment,
+    status,
     regions,
     markets,
     relevanceScore,
