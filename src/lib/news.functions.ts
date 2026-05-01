@@ -5,6 +5,7 @@ import type {
   ImpactLevel,
   NewsItem,
   NewsSource,
+  NewsStatus,
   Sentiment,
   ThemeTag,
   MarketRegion,
