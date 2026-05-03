@@ -9,12 +9,18 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as WatchlistRouteImport } from './routes/watchlist'
 import { Route as SavedRouteImport } from './routes/saved'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ArticleIdRouteImport } from './routes/article.$id'
 
+const WatchlistRoute = WatchlistRouteImport.update({
+  id: '/watchlist',
+  path: '/watchlist',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SavedRoute = SavedRouteImport.update({
   id: '/saved',
   path: '/saved',
@@ -46,6 +52,7 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/login': typeof LoginRoute
   '/saved': typeof SavedRoute
+  '/watchlist': typeof WatchlistRoute
   '/article/$id': typeof ArticleIdRoute
 }
 export interface FileRoutesByTo {
@@ -53,6 +60,7 @@ export interface FileRoutesByTo {
   '/about': typeof AboutRoute
   '/login': typeof LoginRoute
   '/saved': typeof SavedRoute
+  '/watchlist': typeof WatchlistRoute
   '/article/$id': typeof ArticleIdRoute
 }
 export interface FileRoutesById {
@@ -61,14 +69,28 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/login': typeof LoginRoute
   '/saved': typeof SavedRoute
+  '/watchlist': typeof WatchlistRoute
   '/article/$id': typeof ArticleIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/about' | '/login' | '/saved' | '/article/$id'
+  fullPaths:
+    | '/'
+    | '/about'
+    | '/login'
+    | '/saved'
+    | '/watchlist'
+    | '/article/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/about' | '/login' | '/saved' | '/article/$id'
-  id: '__root__' | '/' | '/about' | '/login' | '/saved' | '/article/$id'
+  to: '/' | '/about' | '/login' | '/saved' | '/watchlist' | '/article/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/about'
+    | '/login'
+    | '/saved'
+    | '/watchlist'
+    | '/article/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -76,11 +98,19 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   LoginRoute: typeof LoginRoute
   SavedRoute: typeof SavedRoute
+  WatchlistRoute: typeof WatchlistRoute
   ArticleIdRoute: typeof ArticleIdRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/watchlist': {
+      id: '/watchlist'
+      path: '/watchlist'
+      fullPath: '/watchlist'
+      preLoaderRoute: typeof WatchlistRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/saved': {
       id: '/saved'
       path: '/saved'
@@ -124,6 +154,7 @@ const rootRouteChildren: RootRouteChildren = {
   AboutRoute: AboutRoute,
   LoginRoute: LoginRoute,
   SavedRoute: SavedRoute,
+  WatchlistRoute: WatchlistRoute,
   ArticleIdRoute: ArticleIdRoute,
 }
 export const routeTree = rootRouteImport
