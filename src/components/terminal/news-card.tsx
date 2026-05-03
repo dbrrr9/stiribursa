@@ -1,12 +1,24 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowUpRight, Clock } from "lucide-react";
+import { ArrowUpRight, Clock, Bookmark } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { NewsItem } from "@/lib/news-types";
 import { THEME_LABELS } from "@/lib/news-types";
 import { ImpactBadge, SentimentBadge, SourceBadge, StatusBadge } from "./badges";
 import { timeAgo } from "./clock";
+import { useAuth } from "@/hooks/use-auth";
+import { useSavedArticles } from "@/hooks/use-saved-articles";
 
 export function NewsCard({ item, index = 0, featured = false }: { item: NewsItem; index?: number; featured?: boolean }) {
+  const { user } = useAuth();
+  const { isSaved, toggleSave } = useSavedArticles();
+  const saved = isSaved(item.id);
+
+  const handleSave = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (user) toggleSave(item.id, item.title, item.source, item.summary);
+  };
+
   return (
     <Link
       to="/article/$id"
@@ -25,7 +37,14 @@ export function NewsCard({ item, index = 0, featured = false }: { item: NewsItem
           {item.status === "breaking" && <StatusBadge status="breaking" />}
           <ImpactBadge impact={item.impact} />
         </div>
-        <ArrowUpRight className="h-4 w-4 text-muted-foreground/40 transition-all group-hover:text-teal group-hover:-translate-y-0.5 group-hover:translate-x-0.5 flex-shrink-0" />
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {user && (
+            <button onClick={handleSave} className={cn("p-1 rounded transition-colors", saved ? "text-teal" : "text-muted-foreground/40 hover:text-teal")}>
+              <Bookmark className={cn("h-4 w-4", saved && "fill-current")} />
+            </button>
+          )}
+          <ArrowUpRight className="h-4 w-4 text-muted-foreground/40 transition-all group-hover:text-teal group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+        </div>
       </div>
 
       {/* Title */}

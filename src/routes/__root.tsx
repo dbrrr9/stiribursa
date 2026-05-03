@@ -1,6 +1,7 @@
 import { Outlet, Link, createRootRouteWithContext, HeadContent, Scripts } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PasswordGate } from "@/components/terminal/password-gate";
+import { AuthProvider } from "@/hooks/use-auth";
 
 import appCss from "../styles.css?url";
 
@@ -79,9 +80,11 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   return (
     <QueryClientProvider client={queryClient}>
-      <PasswordGate>
-        <Outlet />
-      </PasswordGate>
+      <AuthProvider>
+        <PasswordGate>
+          <Outlet />
+        </PasswordGate>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
