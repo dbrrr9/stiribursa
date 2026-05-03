@@ -80,9 +80,11 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   return (
     <QueryClientProvider client={queryClient}>
-      <PasswordGate>
-        <Outlet />
-      </PasswordGate>
+      <AuthProvider>
+        <PasswordGate>
+          <Outlet />
+        </PasswordGate>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
