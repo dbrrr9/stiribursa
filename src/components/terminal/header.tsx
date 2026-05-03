@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { LiveClock } from "./clock";
 import { TrendingUp } from "lucide-react";
+import { UserMenu } from "./user-menu";
 
 export function TerminalHeader() {
   return (
@@ -23,7 +24,10 @@ export function TerminalHeader() {
 
           <nav className="hidden md:flex items-center gap-1">
             <NavItem to="/" label="Feed" exact />
-            <NavItem to="/about" label="Despre" />
+            <NavItem to="/themes" label="Teme" />
+            <NavItem to="/saved" label="Salvate" />
+            <NavItem to="/watchlist" label="Watchlist" />
+            <NavItem to="/alerts" label="Alerte" />
           </nav>
 
           <div className="flex items-center gap-3">
@@ -34,6 +38,7 @@ export function TerminalHeader() {
               </span>
             </div>
             <LiveClock />
+            <UserMenu />
           </div>
         </div>
       </div>
