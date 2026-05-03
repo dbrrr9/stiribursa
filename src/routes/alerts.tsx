@@ -50,8 +50,10 @@ function AlertsPage() {
     if (impactLevel) condition.minImpact = impactLevel;
     if (keyword.trim()) condition.keyword = keyword.trim();
 
-    const { data } = await supabase.from("alerts").insert({
-      user_id: user.id, name: name.trim(), type: "theme", condition,
+    const row = {
+      user_id: user.id, name: name.trim(), type: "theme", condition: condition as unknown as import("@/integrations/supabase/types").Json,
+    };
+    const { data } = await supabase.from("alerts").insert(row
     }).select().single();
     if (data) setAlerts((prev) => [data as Alert, ...prev]);
     setName(""); setSelectedThemes([]); setKeyword(""); setShowAdd(false);
