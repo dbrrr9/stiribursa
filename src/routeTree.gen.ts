@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WatchlistRouteImport } from './routes/watchlist'
+import { Route as ThemesRouteImport } from './routes/themes'
 import { Route as SavedRouteImport } from './routes/saved'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AlertsRouteImport } from './routes/alerts'
@@ -20,6 +21,11 @@ import { Route as ArticleIdRouteImport } from './routes/article.$id'
 const WatchlistRoute = WatchlistRouteImport.update({
   id: '/watchlist',
   path: '/watchlist',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ThemesRoute = ThemesRouteImport.update({
+  id: '/themes',
+  path: '/themes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SavedRoute = SavedRouteImport.update({
@@ -59,6 +65,7 @@ export interface FileRoutesByFullPath {
   '/alerts': typeof AlertsRoute
   '/login': typeof LoginRoute
   '/saved': typeof SavedRoute
+  '/themes': typeof ThemesRoute
   '/watchlist': typeof WatchlistRoute
   '/article/$id': typeof ArticleIdRoute
 }
@@ -68,6 +75,7 @@ export interface FileRoutesByTo {
   '/alerts': typeof AlertsRoute
   '/login': typeof LoginRoute
   '/saved': typeof SavedRoute
+  '/themes': typeof ThemesRoute
   '/watchlist': typeof WatchlistRoute
   '/article/$id': typeof ArticleIdRoute
 }
@@ -78,6 +86,7 @@ export interface FileRoutesById {
   '/alerts': typeof AlertsRoute
   '/login': typeof LoginRoute
   '/saved': typeof SavedRoute
+  '/themes': typeof ThemesRoute
   '/watchlist': typeof WatchlistRoute
   '/article/$id': typeof ArticleIdRoute
 }
@@ -89,6 +98,7 @@ export interface FileRouteTypes {
     | '/alerts'
     | '/login'
     | '/saved'
+    | '/themes'
     | '/watchlist'
     | '/article/$id'
   fileRoutesByTo: FileRoutesByTo
@@ -98,6 +108,7 @@ export interface FileRouteTypes {
     | '/alerts'
     | '/login'
     | '/saved'
+    | '/themes'
     | '/watchlist'
     | '/article/$id'
   id:
@@ -107,6 +118,7 @@ export interface FileRouteTypes {
     | '/alerts'
     | '/login'
     | '/saved'
+    | '/themes'
     | '/watchlist'
     | '/article/$id'
   fileRoutesById: FileRoutesById
@@ -117,6 +129,7 @@ export interface RootRouteChildren {
   AlertsRoute: typeof AlertsRoute
   LoginRoute: typeof LoginRoute
   SavedRoute: typeof SavedRoute
+  ThemesRoute: typeof ThemesRoute
   WatchlistRoute: typeof WatchlistRoute
   ArticleIdRoute: typeof ArticleIdRoute
 }
@@ -128,6 +141,13 @@ declare module '@tanstack/react-router' {
       path: '/watchlist'
       fullPath: '/watchlist'
       preLoaderRoute: typeof WatchlistRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/themes': {
+      id: '/themes'
+      path: '/themes'
+      fullPath: '/themes'
+      preLoaderRoute: typeof ThemesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/saved': {
@@ -181,9 +201,19 @@ const rootRouteChildren: RootRouteChildren = {
   AlertsRoute: AlertsRoute,
   LoginRoute: LoginRoute,
   SavedRoute: SavedRoute,
+  ThemesRoute: ThemesRoute,
   WatchlistRoute: WatchlistRoute,
   ArticleIdRoute: ArticleIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}
