@@ -90,8 +90,11 @@ function ArticlePage() {
     refetchOnWindowFocus: false,
   });
 
-  const analysis = analysisData?.analysis;
-  const analysisError = analysisData?.error;
+  const { data: scoreData } = useQuery({
+    queryKey: ["score", item.id],
+    queryFn: () => getAdvancedScore({ data: { id: item.id } }),
+    staleTime: Infinity,
+  });
 
   // Related stories logic
   const relatedStories = useMemo(() => {
