@@ -96,6 +96,10 @@ function ArticlePage() {
     staleTime: Infinity,
   });
 
+  const analysis = analysisData?.analysis;
+  const analysisError = analysisData?.error;
+  const scores = scoreData?.scores;
+
   // Related stories logic
   const relatedStories = useMemo(() => {
     const allItems = allNewsData?.items ?? [];
