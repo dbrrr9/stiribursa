@@ -183,6 +183,23 @@ function ArticlePage() {
           </div>
         </header>
 
+        {/* ADVANCED SCORING */}
+        {scores && (
+          <section className="ms-card p-5 fade-up">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-xs font-semibold uppercase tracking-wider text-teal">Scoring Avansat</span>
+              <span className="h-px flex-1 bg-border" />
+              <span className="text-lg font-bold text-foreground tabular-nums">{scores.overall}<span className="text-xs text-muted-foreground">/100</span></span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <ScoreBar label="Relevanță" value={scores.relevance} />
+              <ScoreBar label="Urgență" value={scores.urgency} />
+              <ScoreBar label="Impact" value={scores.marketImpact} />
+              <ScoreBar label="Încredere" value={scores.confidence} />
+            </div>
+          </section>
+        )}
+
         {/* AI ANALYSIS */}
         {analysisLoading && <AnalysisSkeleton />}
 
