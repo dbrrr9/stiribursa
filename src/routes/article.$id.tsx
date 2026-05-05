@@ -7,7 +7,7 @@ import { NewsCard } from "@/components/terminal/news-card";
 import { ImpactBadge, SentimentBadge, SourceBadge, StatusBadge, RelevanceBar, ScoreBadge } from "@/components/terminal/badges";
 import { formatTimestamp, timeAgo } from "@/components/terminal/clock";
 import { THEME_LABELS, type NewsItem, type ThemeTag, type MarketRegion } from "@/lib/news-types";
-import { analyzeArticle, getNewsItem, fetchLatestNews } from "@/lib/news.functions";
+import { analyzeArticle, getNewsItem, fetchLatestNews, getAdvancedScore } from "@/lib/news.functions";
 
 export const Route = createFileRoute("/article/$id")({
   loader: ({ params }) => getNewsItem({ data: { id: params.id } }),
