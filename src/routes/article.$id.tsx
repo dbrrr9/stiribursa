@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { cn } from "@/lib/utils";
 import { ArrowLeft, ExternalLink, AlertCircle, Clock, TrendingUp } from "lucide-react";
 import { TerminalHeader } from "@/components/terminal/header";
 import { NewsCard } from "@/components/terminal/news-card";
