@@ -17,54 +17,77 @@ const AI_MODEL = "google/gemini-3-flash-preview";
 
 // In-memory cache (per worker instance)
 let newsCache: { items: NewsItem[]; ts: number } | null = null;
-const CACHE_TTL_MS = 1000 * 60 * 10; // 10 min
+const CACHE_TTL_MS = 1000 * 60 * 8; // 8 min — more frequent refreshes
 const analysisCache = new Map<string, ArticleAnalysis>();
+let dailyBriefCache: { brief: DailyBrief; ts: number } | null = null;
 
 // ============================================================================
-// RSS FEEDS — surse permise: Reuters, CNBC, MarketWatch, Yahoo Finance.
-// Bloomberg păstrat ca extra premium (high-impact only).
+// RSS FEEDS — expanded for better geopolitical + market coverage
 // ============================================================================
 type FeedTier = "primary" | "secondary";
 const RSS_FEEDS: { source: NewsSource; url: string; tier: FeedTier }[] = [
-  // === PRIMARY ===
-  // Reuters via Google News (RSS oficial Reuters închis)
+  // === REUTERS — multiple queries for breadth ===
   {
     source: "Reuters",
     url: "https://news.google.com/rss/search?q=site:reuters.com+(markets+OR+stocks+OR+economy+OR+fed+OR+earnings)&hl=en-US&gl=US&ceid=US:en",
     tier: "primary",
   },
-  // Yahoo Finance — feed direct
   {
-    source: "Yahoo Finance",
-    url: "https://finance.yahoo.com/news/rssindex",
+    source: "Reuters",
+    url: "https://news.google.com/rss/search?q=site:reuters.com+(iran+OR+sanctions+OR+war+OR+geopolitics+OR+tariff+OR+trade+war+OR+middle+east)&hl=en-US&gl=US&ceid=US:en",
     tier: "primary",
   },
   {
-    source: "Yahoo Finance",
-    url: "https://news.google.com/rss/search?q=site:finance.yahoo.com+(markets+OR+stocks+OR+earnings)&hl=en-US&gl=US&ceid=US:en",
+    source: "Reuters",
+    url: "https://news.google.com/rss/search?q=site:reuters.com+(oil+OR+gold+OR+treasury+OR+inflation+OR+recession+OR+china+OR+russia)&hl=en-US&gl=US&ceid=US:en",
     tier: "primary",
   },
-  // CNBC — markets
-  { source: "CNBC", url: "https://www.cnbc.com/id/10000664/device/rss/rss.html", tier: "primary" },
-  // MarketWatch — top stories
-  { source: "MarketWatch", url: "https://feeds.content.dowjones.io/public/rss/mw_topstories", tier: "primary" },
+  {
+    source: "Reuters",
+    url: "https://news.google.com/rss/search?q=site:reuters.com+(nuclear+OR+deal+OR+sanctions+OR+drone+OR+attack+OR+military+OR+defense)&hl=en-US&gl=US&ceid=US:en",
+    tier: "primary",
+  },
 
-  // === SECONDARY (Bloomberg — doar high-impact) ===
+  // === BLOOMBERG — multiple queries ===
   {
     source: "Bloomberg",
-    url: "https://news.google.com/rss/search?q=site:bloomberg.com+(markets+OR+stocks+OR+economy+OR+fed+OR+earnings)&hl=en-US&gl=US&ceid=US:en",
+    url: "https://news.google.com/rss/search?q=site:bloomberg.com+(markets+OR+stocks+OR+economy+OR+fed+OR+earnings+OR+oil+OR+gold)&hl=en-US&gl=US&ceid=US:en",
+    tier: "primary",
+  },
+  {
+    source: "Bloomberg",
+    url: "https://news.google.com/rss/search?q=site:bloomberg.com+(iran+OR+sanctions+OR+war+OR+geopolitics+OR+tariff+OR+trade+OR+defense)&hl=en-US&gl=US&ceid=US:en",
+    tier: "primary",
+  },
+  {
+    source: "Bloomberg",
+    url: "https://news.google.com/rss/search?q=site:bloomberg.com+(crypto+OR+bitcoin+OR+inflation+OR+recession+OR+china+OR+treasury)&hl=en-US&gl=US&ceid=US:en",
     tier: "secondary",
   },
+
+  // === Yahoo Finance ===
+  { source: "Yahoo Finance", url: "https://finance.yahoo.com/news/rssindex", tier: "primary" },
+  {
+    source: "Yahoo Finance",
+    url: "https://news.google.com/rss/search?q=site:finance.yahoo.com+(markets+OR+stocks+OR+earnings+OR+economy)&hl=en-US&gl=US&ceid=US:en",
+    tier: "primary",
+  },
+
+  // === CNBC ===
+  { source: "CNBC", url: "https://www.cnbc.com/id/10000664/device/rss/rss.html", tier: "primary" },
+  { source: "CNBC", url: "https://www.cnbc.com/id/10001147/device/rss/rss.html", tier: "primary" }, // World
+
+  // === MarketWatch ===
+  { source: "MarketWatch", url: "https://feeds.content.dowjones.io/public/rss/mw_topstories", tier: "primary" },
+  { source: "MarketWatch", url: "https://feeds.content.dowjones.io/public/rss/mw_marketpulse", tier: "secondary" },
 ];
 
-const TARGET_TOTAL = 50;
-// Vârstă maximă acceptată (24h) — feedul e despre "ce se întâmplă acum"
-const MAX_AGE_MS = 1000 * 60 * 60 * 24;
-// Scor minim de relevanță pentru a apărea în feed
-const MIN_RELEVANCE = 50;
+const TARGET_TOTAL = 80; // more news
+const MAX_AGE_MS = 1000 * 60 * 60 * 36; // 36h for broader coverage
+const MIN_RELEVANCE = 40; // lower threshold to catch more geopolitical news
 
 // ============================================================================
-// AI helper (opțional — folosit doar dacă LOVABLE_API_KEY e configurat)
+// AI helper
 // ============================================================================
 async function callAI(prompt: string, system: string, jsonSchema?: object) {
   const key = process.env.LOVABLE_API_KEY;
@@ -115,7 +138,7 @@ async function callAI(prompt: string, system: string, jsonSchema?: object) {
 }
 
 // ============================================================================
-// RSS PARSER — fără dependințe, parsing manual XML
+// RSS PARSER
 // ============================================================================
 interface RawArticle {
   title: string;
@@ -150,7 +173,6 @@ function extractTag(block: string, tag: string): string {
 
 function parseRSS(xml: string, source: NewsSource): RawArticle[] {
   const items: RawArticle[] = [];
-  // Suport RSS 2.0 (<item>) și Atom (<entry>)
   const itemBlocks = xml.match(/<item[\s>][\s\S]*?<\/item>/gi) ?? [];
   const entryBlocks = xml.match(/<entry[\s>][\s\S]*?<\/entry>/gi) ?? [];
 
@@ -186,13 +208,11 @@ async function fetchRSSFeed(url: string, source: NewsSource): Promise<RawArticle
   try {
     const r = await fetch(url, {
       headers: {
-        // Multe site-uri blochează user agents de bot
         "User-Agent":
-          "Mozilla/5.0 (compatible; CapitalTermBot/1.0; +https://capital-term.app)",
+          "Mozilla/5.0 (compatible; MarketScopeBot/2.0; +https://marketscope.app)",
         Accept: "application/rss+xml, application/xml, text/xml, */*",
       },
-      // 8s timeout via signal
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(10000),
     });
     if (!r.ok) {
       console.error(`RSS ${source} ${url} -> ${r.status}`);
@@ -207,27 +227,34 @@ async function fetchRSSFeed(url: string, source: NewsSource): Promise<RawArticle
 }
 
 // ============================================================================
-// CLASIFICARE EURISTICĂ — fără AI, instant
-// Recunoaște teme/impact/sentiment din keywords
+// CLASSIFICATION — expanded keywords for geopolitics
 // ============================================================================
 const THEME_KEYWORDS: Record<ThemeTag, string[]> = {
-  actiuni: ["stock", "shares", "equity", "equities", "nasdaq", "s&p", "dow", "ipo", "listing"],
-  obligatiuni: ["bond", "yield", "treasury", "treasuries", "credit", "debt", "coupon"],
-  indici: ["index", "indices", "s&p 500", "nasdaq", "dow jones", "ftse", "dax", "nikkei"],
-  forex: ["dollar", "euro", "yen", "currency", "forex", "fx", "exchange rate", "yuan", "sterling"],
-  marfuri: ["oil", "gold", "silver", "copper", "wheat", "gas", "commodit", "brent", "wti", "opec"],
-  crypto: ["bitcoin", "btc", "ethereum", "eth", "crypto", "blockchain", "stablecoin", "binance"],
-  macro: ["inflation", "gdp", "cpi", "ppi", "unemployment", "jobs", "recession", "growth", "pmi"],
-  earnings: ["earnings", "revenue", "profit", "guidance", "quarter", "results", "beats", "misses"],
-  "banci-centrale": ["fed", "ecb", "boe", "boj", "powell", "lagarde", "rate", "hike", "cut", "fomc", "interest rate"],
-  geopolitica: ["war", "ukraine", "russia", "china", "tariff", "sanction", "iran", "trade war", "election"],
+  actiuni: ["stock", "shares", "equity", "equities", "nasdaq", "s&p", "dow", "ipo", "listing", "rally", "selloff", "sell-off"],
+  obligatiuni: ["bond", "yield", "treasury", "treasuries", "credit", "debt", "coupon", "spread"],
+  indici: ["index", "indices", "s&p 500", "nasdaq", "dow jones", "ftse", "dax", "nikkei", "hang seng", "stoxx"],
+  forex: ["dollar", "euro", "yen", "currency", "forex", "fx", "exchange rate", "yuan", "sterling", "usd", "eur"],
+  marfuri: ["oil", "gold", "silver", "copper", "wheat", "gas", "commodit", "brent", "wti", "opec", "natural gas", "lng", "uranium"],
+  crypto: ["bitcoin", "btc", "ethereum", "eth", "crypto", "blockchain", "stablecoin", "binance", "coinbase", "defi"],
+  macro: ["inflation", "gdp", "cpi", "ppi", "unemployment", "jobs", "recession", "growth", "pmi", "consumer", "retail sales", "housing"],
+  earnings: ["earnings", "revenue", "profit", "guidance", "quarter", "results", "beats", "misses", "forecast", "outlook"],
+  "banci-centrale": ["fed", "ecb", "boe", "boj", "powell", "lagarde", "rate", "hike", "cut", "fomc", "interest rate", "monetary policy", "tightening", "easing"],
+  geopolitica: [
+    "war", "ukraine", "russia", "china", "tariff", "sanction", "iran", "trade war", "election",
+    "nuclear", "missile", "drone", "attack", "military", "defense", "conflict", "tension",
+    "middle east", "israel", "hamas", "hezbollah", "gaza", "red sea", "houthi",
+    "nato", "pentagon", "troops", "ceasefire", "negotiation", "diplomacy",
+    "trump", "biden", "xi jinping", "putin", "khamenei", "netanyahu",
+    "strait of hormuz", "persian gulf", "south china sea", "taiwan",
+    "coup", "regime", "embargo", "blockade", "proxy war",
+  ],
 };
 
 const REGION_KEYWORDS: Record<MarketRegion, string[]> = {
-  SUA: ["us ", "u.s.", "wall street", "fed", "nasdaq", "dow", "s&p", "biden", "trump", "treasury"],
-  Europa: ["europe", "ecb", "euro", "germany", "france", "uk ", "britain", "ftse", "dax"],
-  Asia: ["china", "japan", "india", "korea", "asia", "boj", "yen", "yuan", "nikkei", "hang seng"],
-  Emergente: ["emerging", "brazil", "mexico", "turkey", "india", "south africa"],
+  SUA: ["us ", "u.s.", "wall street", "fed", "nasdaq", "dow", "s&p", "biden", "trump", "treasury", "pentagon", "white house", "congress", "american"],
+  Europa: ["europe", "ecb", "euro", "germany", "france", "uk ", "britain", "ftse", "dax", "nato", "eu "],
+  Asia: ["china", "japan", "india", "korea", "asia", "boj", "yen", "yuan", "nikkei", "hang seng", "taiwan", "xi jinping"],
+  Emergente: ["emerging", "brazil", "mexico", "turkey", "india", "south africa", "iran", "saudi", "opec"],
   Global: [],
 };
 
@@ -235,16 +262,20 @@ const HIGH_IMPACT_TRIGGERS = [
   "fed", "fomc", "rate hike", "rate cut", "inflation", "cpi",
   "war", "crash", "surge", "plunge", "recession", "default",
   "earnings beat", "earnings miss", "ipo", "merger", "acquisition",
-  "sanctions", "tariff",
+  "sanctions", "tariff", "iran", "nuclear", "missile", "attack",
+  "ceasefire", "invasion", "embargo", "blockade",
+  "breaking", "just in", "alert", "urgent",
+  "oil spike", "gold surge", "dollar plunge",
+  "trump", "biden", "powell",
 ];
 
-const NEGATIVE_WORDS = ["fall", "drop", "plunge", "crash", "loss", "miss", "weak", "decline", "fear", "concern", "warn", "cut", "recession", "slump"];
-const POSITIVE_WORDS = ["rise", "surge", "gain", "jump", "rally", "beat", "strong", "growth", "record", "high", "boost", "upgrade"];
+const NEGATIVE_WORDS = ["fall", "drop", "plunge", "crash", "loss", "miss", "weak", "decline", "fear", "concern", "warn", "cut", "recession", "slump", "threat", "escalat", "strike", "bomb", "kill", "casualties", "collapse"];
+const POSITIVE_WORDS = ["rise", "surge", "gain", "jump", "rally", "beat", "strong", "growth", "record", "high", "boost", "upgrade", "ceasefire", "peace", "deal", "agree", "recover"];
 
 function classifyArticle(raw: RawArticle, idx: number): NewsItem | null {
   const text = `${raw.title} ${raw.description}`.toLowerCase();
 
-  // Filtrăm conținut clar non-financiar
+  // Check for financial or geopolitical relevance
   const financialHit = Object.values(THEME_KEYWORDS).flat().some((k) => text.includes(k));
   if (!financialHit) return null;
 
@@ -255,6 +286,18 @@ function classifyArticle(raw: RawArticle, idx: number): NewsItem | null {
   }
   if (themes.length === 0) return null;
 
+  // Geopolitical news with market implications should always get a market theme too
+  if (themes.includes("geopolitica") && !themes.some(t => ["actiuni", "marfuri", "forex", "obligatiuni", "indici"].includes(t))) {
+    // Auto-add marfuri for Middle East/oil-related geopolitics
+    if (["iran", "saudi", "opec", "oil", "hormuz", "gulf", "middle east"].some(k => text.includes(k))) {
+      themes.push("marfuri");
+    }
+    // Military conflicts affect equities
+    if (["war", "attack", "missile", "invasion", "bomb"].some(k => text.includes(k))) {
+      themes.push("actiuni");
+    }
+  }
+
   // Regions
   const regions: MarketRegion[] = [];
   for (const [region, kws] of Object.entries(REGION_KEYWORDS) as [MarketRegion, string[]][]) {
@@ -263,11 +306,13 @@ function classifyArticle(raw: RawArticle, idx: number): NewsItem | null {
   }
   if (regions.length === 0) regions.push("Global");
 
-  // Impact
+  // Impact — boosted for geopolitics
   let impact: ImpactLevel = "low";
   const highHits = HIGH_IMPACT_TRIGGERS.filter((k) => text.includes(k)).length;
-  if (highHits >= 2) impact = "high";
-  else if (highHits === 1 || themes.length >= 3) impact = "medium";
+  const isGeopolitical = themes.includes("geopolitica");
+  
+  if (highHits >= 2 || (isGeopolitical && highHits >= 1)) impact = "high";
+  else if (highHits === 1 || themes.length >= 3 || isGeopolitical) impact = "medium";
 
   // Sentiment
   const negHits = NEGATIVE_WORDS.filter((w) => text.includes(w)).length;
@@ -284,6 +329,7 @@ function classifyArticle(raw: RawArticle, idx: number): NewsItem | null {
   if (themes.includes("forex")) markets.push("FX");
   if (themes.includes("marfuri")) markets.push("Commodities");
   if (themes.includes("crypto")) markets.push("Crypto");
+  if (markets.length === 0 && isGeopolitical) markets.push("Macro");
 
   // Status
   const ageMs = Date.now() - new Date(raw.pubDate || Date.now()).getTime();
@@ -291,13 +337,15 @@ function classifyArticle(raw: RawArticle, idx: number): NewsItem | null {
   if (ageMs < 1000 * 60 * 30 && impact === "high") status = "breaking";
   else if (ageMs < 1000 * 60 * 120 && impact !== "low") status = "developing";
 
-  // Relevance score: impact + theme breadth + freshness
+  // Relevance score — boosted for geopolitical + multi-theme
   const impactScore = impact === "high" ? 80 : impact === "medium" ? 55 : 30;
-  const themeBonus = Math.min(themes.length * 4, 15);
-  const triggerBonus = Math.min(highHits * 3, 10);
-  const relevanceScore = Math.min(100, impactScore + themeBonus + triggerBonus);
+  const themeBonus = Math.min(themes.length * 5, 20);
+  const triggerBonus = Math.min(highHits * 4, 15);
+  const geoBonus = isGeopolitical ? 10 : 0;
+  const sourceBonus = (raw.source === "Reuters" || raw.source === "Bloomberg") ? 5 : 0;
+  const relevanceScore = Math.min(100, impactScore + themeBonus + triggerBonus + geoBonus + sourceBonus);
 
-  // Published date — fallback la now staggered
+  // Published date
   let publishedAt: string;
   try {
     const d = raw.pubDate ? new Date(raw.pubDate) : new Date();
@@ -308,11 +356,9 @@ function classifyArticle(raw: RawArticle, idx: number): NewsItem | null {
     publishedAt = new Date(Date.now() - idx * 60_000).toISOString();
   }
 
-  // Summary: first ~200 chars din description sau title
-  const cleanDesc = raw.description.slice(0, 240).trim();
+  const cleanDesc = raw.description.slice(0, 280).trim();
   const summary = cleanDesc.length > 30 ? cleanDesc : raw.title;
 
-  // Stable ID din URL hash
   const id = `${raw.source.toLowerCase().replace(/[^a-z]/g, "")}-${hashString(raw.link || raw.title)}`;
 
   return {
@@ -345,7 +391,6 @@ function hashString(s: string): string {
 // MAIN: fetch news from RSS feeds
 // ============================================================================
 export const fetchLatestNews = createServerFn({ method: "GET" }).handler(async () => {
-  // Cache hit
   if (newsCache && Date.now() - newsCache.ts < CACHE_TTL_MS) {
     return { items: newsCache.items, cached: true, source: "cache" as const };
   }
@@ -360,31 +405,25 @@ export const fetchLatestNews = createServerFn({ method: "GET" }).handler(async (
       if (r.status === "fulfilled") allRaw.push(...r.value);
     }
 
-    // Dedupe by title (case-insensitive)
+    // Dedupe by title similarity
     const seen = new Set<string>();
     const deduped: RawArticle[] = [];
     for (const a of allRaw) {
-      const key = a.title.toLowerCase().slice(0, 80);
+      const key = a.title.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 60);
       if (!seen.has(key)) {
         seen.add(key);
         deduped.push(a);
       }
     }
 
-    // Classify + filter only financially-relevant
     const now = Date.now();
     const classified = deduped
       .map((a, i) => classifyArticle(a, i))
       .filter((x): x is NewsItem => x !== null)
-      // Vârstă maximă 24h
       .filter((n) => now - new Date(n.publishedAt).getTime() <= MAX_AGE_MS)
-      // Doar high/medium impact + scor relevanță decent
-      .filter((n) => n.impact !== "low" && n.relevanceScore >= MIN_RELEVANCE)
-      // Bloomberg = secondary, doar high impact
-      .filter((n) => n.source !== "Bloomberg" || n.impact === "high");
+      .filter((n) => n.relevanceScore >= MIN_RELEVANCE);
 
     if (classified.length >= 5) {
-      // Sortare DEFAULT: cele mai noi sus
       classified.sort(
         (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
       );
@@ -397,7 +436,6 @@ export const fetchLatestNews = createServerFn({ method: "GET" }).handler(async (
     console.error("RSS aggregation failed:", e);
   }
 
-  // Fallback to seed
   newsCache = { items: SEED_NEWS, ts: Date.now() };
   return { items: SEED_NEWS, cached: false, source: "seed" as const };
 });
@@ -461,11 +499,11 @@ const analyzeArticleSchema = z.object({
 
 function fallbackAnalysis(data: { title: string; source: string; summary: string }): ArticleAnalysis {
   return {
-    summarySimple: `${data.summary}\n\nAceastă știre vine de la ${data.source} și se referă la un eveniment relevant pentru piețele financiare. Pentru o analiză AI detaliată în limba română, conectează Lovable AI Gateway în setări.`,
-    whyItMatters: "Subiectul are potențial impact asupra prețurilor activelor și asupra deciziilor investitorilor. Activează AI-ul în setările Lovable Cloud pentru o analiză completă.",
-    shortTermImpact: "Reacțiile pe termen scurt vor depinde de cum interpretează piața evenimentul și de poziționarea actuală a investitorilor.",
+    summarySimple: `${data.summary}\n\nAceastă știre vine de la ${data.source} și se referă la un eveniment relevant pentru piețele financiare.`,
+    whyItMatters: "Subiectul are potențial impact asupra prețurilor activelor și asupra deciziilor investitorilor.",
+    shortTermImpact: "Reacțiile pe termen scurt vor depinde de cum interpretează piața evenimentul.",
     mediumTermImpact: "Pe termen mediu, traiectoria depinde de evoluția narrative-ului macro și de deciziile băncilor centrale.",
-    affectedMarkets: "Verifică etichetele de teme și piețe din pagina principală pentru contextul exact al acestei știri.",
+    affectedMarkets: "Verifică etichetele de teme și piețe din pagina principală pentru contextul exact.",
     watchPoints: [
       "Reacția imediată a indicilor majori",
       "Mișcările pe yield-urile obligațiunilor de stat",
@@ -515,8 +553,8 @@ Generează o analiză completă urmând schema cerută.`;
     } catch (e) {
       console.error("analyzeArticle", e);
       const msg = e instanceof Error ? e.message : "unknown";
-      if (msg.includes("429")) return { analysis: fallbackAnalysis(data), error: "Prea multe cereri AI. Folosim o analiză de bază." };
-      if (msg.includes("402")) return { analysis: fallbackAnalysis(data), error: "Credite AI epuizate. Folosim o analiză de bază." };
+      if (msg.includes("429")) return { analysis: fallbackAnalysis(data), error: "Prea multe cereri AI." };
+      if (msg.includes("402")) return { analysis: fallbackAnalysis(data), error: "Credite AI epuizate." };
       return { analysis: fallbackAnalysis(data) };
     }
   });
@@ -534,7 +572,7 @@ export const getNewsItem = createServerFn({ method: "POST" })
   });
 
 // ============================================================================
-// CUSTOM NEWS ANALYSIS — utilizatorul lipește un URL sau text și AI explică
+// CUSTOM NEWS ANALYSIS
 // ============================================================================
 const customAnalyzeSchema = z.object({
   input: z.string().min(10).max(8000),
@@ -558,28 +596,20 @@ export const analyzeCustomNews = createServerFn({ method: "POST" })
       let bodyText = raw;
       let sourceLabel = "Sursă utilizator";
 
-      // Dacă e URL, încercăm: 1) fetch direct, 2) fallback prin r.jina.ai (text reader proxy)
       if (isUrl) {
         try {
           const urlObj = new URL(raw);
           sourceLabel = urlObj.hostname.replace(/^www\./, "");
         } catch {
-          return {
-            analysis: null,
-            title,
-            sourceLabel,
-            error: "URL invalid. Verifică linkul sau lipește textul știrii direct.",
-          };
+          return { analysis: null, title, sourceLabel, error: "URL invalid." };
         }
 
         const tryDirect = async (): Promise<string | null> => {
           try {
             const r = await fetch(raw, {
               headers: {
-                "User-Agent":
-                  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-                Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                "Accept-Language": "en-US,en;q=0.9,ro;q=0.8",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                Accept: "text/html,application/xhtml+xml,*/*",
               },
               signal: AbortSignal.timeout(9000),
               redirect: "follow",
@@ -592,14 +622,10 @@ export const analyzeCustomNews = createServerFn({ method: "POST" })
         };
 
         const tryReaderProxy = async (): Promise<string | null> => {
-          // r.jina.ai întoarce conținutul ca markdown curat — bypass paywall/blocaje user-agent
           try {
             const proxied = `https://r.jina.ai/${raw}`;
             const r = await fetch(proxied, {
-              headers: {
-                "User-Agent": "Mozilla/5.0 CapitalTerm/1.0",
-                Accept: "text/plain, text/markdown, */*",
-              },
+              headers: { "User-Agent": "Mozilla/5.0 MarketScope/2.0", Accept: "text/plain, */*" },
               signal: AbortSignal.timeout(12000),
             });
             if (!r.ok) return null;
@@ -631,31 +657,17 @@ export const analyzeCustomNews = createServerFn({ method: "POST" })
           bodyText = [title, desc, paragraphs].filter(Boolean).join("\n\n").slice(0, 7000);
         }
 
-        // Dacă fetch direct a eșuat sau a întors prea puțin text, încercăm proxy
         if (!html || bodyText.length < 200) {
           const md = await tryReaderProxy();
           if (md) {
-            // Primul rând non-gol = titlu probabil
-            const lines = md
-              .split("\n")
-              .map((l) => l.replace(/^#+\s*/, "").trim())
-              .filter(Boolean);
-            if (lines[0] && lines[0].length > 8 && lines[0].length < 220) {
-              title = lines[0];
-            }
+            const lines = md.split("\n").map((l) => l.replace(/^#+\s*/, "").trim()).filter(Boolean);
+            if (lines[0] && lines[0].length > 8 && lines[0].length < 220) title = lines[0];
             bodyText = md.slice(0, 7000);
           } else if (!html) {
-            return {
-              analysis: null,
-              title,
-              sourceLabel,
-              error:
-                "Nu pot accesa URL-ul (probabil are paywall sau blochează scraperele). Lipește direct textul știrii în câmpul de mai sus.",
-            };
+            return { analysis: null, title, sourceLabel, error: "Nu pot accesa URL-ul. Lipește direct textul știrii." };
           }
         }
       } else {
-        // E text liber — primul rând devine titlu
         const firstLine = raw.split("\n")[0].trim();
         if (firstLine.length > 8 && firstLine.length < 200) title = firstLine;
       }
@@ -663,42 +675,243 @@ export const analyzeCustomNews = createServerFn({ method: "POST" })
       if (!process.env.LOVABLE_API_KEY) {
         return {
           analysis: fallbackAnalysis({ title, source: sourceLabel, summary: bodyText.slice(0, 300) }),
-          title,
-          sourceLabel,
-          error: "AI-ul nu este configurat. Afișăm o analiză de bază.",
+          title, sourceLabel, error: "AI-ul nu este configurat.",
         };
       }
 
-      const sys = `Ești un analist financiar senior care explică știri de piață pentru investitori români. Scrii în limba română, clar, profesionist, fără clickbait. Folosești paragrafe scurte. Când apar termeni tehnici (yield, basis points, hawkish, dovish, FOMC, EBITDA), îi explici scurt în paranteză. Te concentrezi pe IMPACT REAL asupra piețelor: acțiuni, obligațiuni, FX, mărfuri, crypto.`;
-
-      const usr = `Analizează următoarea știre furnizată de utilizator și produ o explicație completă pentru un investitor român. Identifică singur tema, regiunea și piețele afectate.
-
-SURSĂ: ${sourceLabel}
-TITLU: ${title}
-
-CONȚINUT:
-${bodyText}
-
-Generează o analiză completă urmând schema cerută. Dacă textul nu este o știre financiară clară, oferă oricum cel mai bun context posibil despre eventualul impact pe piețe.`;
+      const sys = `Ești un analist financiar senior care explică știri de piață pentru investitori români. Scrii în limba română, clar, profesionist.`;
+      const usr = `Analizează următoarea știre:\n\nSURSĂ: ${sourceLabel}\nTITLU: ${title}\n\nCONȚINUT:\n${bodyText}\n\nGenerează o analiză completă urmând schema cerută.`;
 
       try {
         const result = (await callAI(usr, sys, ANALYSIS_SCHEMA)) as ArticleAnalysis | null;
-        if (result) {
-          return { analysis: result, title, sourceLabel };
-        }
-        return {
-          analysis: fallbackAnalysis({ title, source: sourceLabel, summary: bodyText.slice(0, 300) }),
-          title,
-          sourceLabel,
-        };
+        if (result) return { analysis: result, title, sourceLabel };
+        return { analysis: fallbackAnalysis({ title, source: sourceLabel, summary: bodyText.slice(0, 300) }), title, sourceLabel };
       } catch (e) {
         const msg = e instanceof Error ? e.message : "unknown";
         const fb = fallbackAnalysis({ title, source: sourceLabel, summary: bodyText.slice(0, 300) });
-        if (msg.includes("429"))
-          return { analysis: fb, title, sourceLabel, error: "Prea multe cereri AI. Încearcă din nou în câteva secunde." };
-        if (msg.includes("402"))
-          return { analysis: fb, title, sourceLabel, error: "Credite AI epuizate. Adaugă credite în Settings → Workspace → Usage." };
-        return { analysis: fb, title, sourceLabel, error: "Eroare AI. Afișăm o analiză de bază." };
+        if (msg.includes("429")) return { analysis: fb, title, sourceLabel, error: "Prea multe cereri AI." };
+        if (msg.includes("402")) return { analysis: fb, title, sourceLabel, error: "Credite AI epuizate." };
+        return { analysis: fb, title, sourceLabel, error: "Eroare AI." };
       }
     },
   );
+
+// ============================================================================
+// PHASE 3: Daily Brief
+// ============================================================================
+export interface DailyBrief {
+  date: string;
+  marketOverview: string;
+  topThemes: { theme: string; summary: string; sentiment: Sentiment }[];
+  keyEvents: { time: string; event: string; impact: ImpactLevel }[];
+  outlook: string;
+  generatedAt: string;
+}
+
+const DAILY_BRIEF_SCHEMA = {
+  type: "object",
+  properties: {
+    marketOverview: { type: "string", description: "2-3 paragrafe cu un rezumat general al piețelor azi, în română." },
+    topThemes: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          theme: { type: "string" },
+          summary: { type: "string" },
+          sentiment: { type: "string", enum: ["positive", "negative", "mixed", "uncertain"] },
+        },
+        required: ["theme", "summary", "sentiment"],
+      },
+      description: "3-5 teme dominante ale zilei cu rezumat scurt.",
+    },
+    keyEvents: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          time: { type: "string", description: "Ora sau perioadă (ex: '14:30 ET', 'dimineață')" },
+          event: { type: "string" },
+          impact: { type: "string", enum: ["high", "medium", "low"] },
+        },
+        required: ["time", "event", "impact"],
+      },
+      description: "Evenimente cheie de urmărit azi/mâine.",
+    },
+    outlook: { type: "string", description: "1-2 paragrafe — perspectivă pe termen scurt pentru investitori." },
+  },
+  required: ["marketOverview", "topThemes", "keyEvents", "outlook"],
+};
+
+export const getDailyBrief = createServerFn({ method: "GET" }).handler(async (): Promise<{ brief: DailyBrief | null; error?: string }> => {
+  // Cache 2h
+  if (dailyBriefCache && Date.now() - dailyBriefCache.ts < 1000 * 60 * 120) {
+    return { brief: dailyBriefCache.brief };
+  }
+
+  // Need current news for context
+  const newsData = newsCache?.items ?? SEED_NEWS;
+  const topNews = newsData.slice(0, 20);
+
+  if (!process.env.LOVABLE_API_KEY) {
+    const fallback: DailyBrief = {
+      date: new Date().toISOString().split("T")[0],
+      marketOverview: "Briefing-ul zilnic necesită AI activat. Verifică setările Lovable Cloud.",
+      topThemes: topNews.slice(0, 3).map(n => ({
+        theme: n.themes[0] ?? "general",
+        summary: n.title,
+        sentiment: n.sentiment,
+      })),
+      keyEvents: [],
+      outlook: "Activează AI pentru un rezumat complet al piețelor.",
+      generatedAt: new Date().toISOString(),
+    };
+    return { brief: fallback };
+  }
+
+  const newsSummary = topNews.map((n, i) =>
+    `${i + 1}. [${n.source}] ${n.title} — Impact: ${n.impact}, Sentiment: ${n.sentiment}, Teme: ${n.themes.join(", ")}`
+  ).join("\n");
+
+  const sys = `Ești un analist financiar senior care scrie briefing-uri zilnice de piață în limba română. Scrii clar, profesionist, condensat. Focus pe ce contează pentru un investitor activ.`;
+  const usr = `Pe baza acestor știri recente, generează un briefing zilnic complet:\n\n${newsSummary}\n\nData: ${new Date().toLocaleDateString("ro-RO", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}`;
+
+  try {
+    const result = await callAI(usr, sys, DAILY_BRIEF_SCHEMA);
+    if (result) {
+      const brief: DailyBrief = {
+        date: new Date().toISOString().split("T")[0],
+        ...result,
+        generatedAt: new Date().toISOString(),
+      };
+      dailyBriefCache = { brief, ts: Date.now() };
+      return { brief };
+    }
+    return { brief: null, error: "Nu s-a putut genera briefing-ul." };
+  } catch (e) {
+    console.error("getDailyBrief", e);
+    return { brief: null, error: "Eroare la generarea briefing-ului zilnic." };
+  }
+});
+
+// ============================================================================
+// PHASE 3: Catalyst Calendar
+// ============================================================================
+export interface CatalystEvent {
+  id: string;
+  date: string;
+  time?: string;
+  title: string;
+  description: string;
+  impact: ImpactLevel;
+  category: "earnings" | "economic" | "central-bank" | "geopolitical" | "ipo" | "other";
+  regions: MarketRegion[];
+  affectedMarkets: string[];
+}
+
+const CATALYST_SCHEMA = {
+  type: "object",
+  properties: {
+    events: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          date: { type: "string", description: "YYYY-MM-DD" },
+          time: { type: "string", description: "HH:MM ET sau 'TBD'" },
+          title: { type: "string" },
+          description: { type: "string", description: "1-2 propoziții despre ce înseamnă evenimentul." },
+          impact: { type: "string", enum: ["high", "medium", "low"] },
+          category: { type: "string", enum: ["earnings", "economic", "central-bank", "geopolitical", "ipo", "other"] },
+          regions: { type: "array", items: { type: "string" } },
+          affectedMarkets: { type: "array", items: { type: "string" } },
+        },
+        required: ["date", "title", "description", "impact", "category", "regions", "affectedMarkets"],
+      },
+    },
+  },
+  required: ["events"],
+};
+
+let catalystCache: { events: CatalystEvent[]; ts: number } | null = null;
+
+export const getCatalystCalendar = createServerFn({ method: "GET" }).handler(async (): Promise<{ events: CatalystEvent[]; error?: string }> => {
+  if (catalystCache && Date.now() - catalystCache.ts < 1000 * 60 * 60 * 4) {
+    return { events: catalystCache.events };
+  }
+
+  if (!process.env.LOVABLE_API_KEY) {
+    return { events: getStaticCatalysts(), error: undefined };
+  }
+
+  const today = new Date();
+  const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  const sys = `Ești un analist financiar care cunoaște calendarul economic și de earnings. Generează evenimente reale programate.`;
+  const usr = `Generează un calendar de catalizatori de piață pentru perioada ${today.toISOString().split("T")[0]} — ${nextWeek.toISOString().split("T")[0]}. Include: earnings majore (big tech, bănci), date economice (CPI, PPI, NFP, GDP, PMI, FOMC), evenimente geopolitice programate, IPO-uri. Doar evenimente reale și plauzibile. Descrierile în română.`;
+
+  try {
+    const result = await callAI(usr, sys, CATALYST_SCHEMA);
+    if (result?.events) {
+      const events: CatalystEvent[] = result.events.map((e: CatalystEvent, i: number) => ({
+        ...e,
+        id: `cat-${hashString(e.title)}-${i}`,
+      }));
+      catalystCache = { events, ts: Date.now() };
+      return { events };
+    }
+    return { events: getStaticCatalysts() };
+  } catch (e) {
+    console.error("getCatalystCalendar", e);
+    return { events: getStaticCatalysts(), error: "Eroare la generarea calendarului." };
+  }
+});
+
+function getStaticCatalysts(): CatalystEvent[] {
+  const today = new Date();
+  const fmt = (d: number) => new Date(today.getTime() + d * 86400000).toISOString().split("T")[0];
+  return [
+    { id: "cat-1", date: fmt(1), time: "14:30 ET", title: "CPI SUA (lunar)", description: "Indicele prețurilor de consum — indicator cheie pentru deciziile Fed.", impact: "high", category: "economic", regions: ["SUA"], affectedMarkets: ["Bonds", "Equities", "FX"] },
+    { id: "cat-2", date: fmt(2), time: "16:00 ET", title: "Decizia FOMC", description: "Reuniunea Fed cu potențial impact asupra ratelor dobânzii.", impact: "high", category: "central-bank", regions: ["SUA", "Global"], affectedMarkets: ["Bonds", "Equities", "FX", "Commodities"] },
+    { id: "cat-3", date: fmt(3), title: "Earnings: Apple, Microsoft", description: "Raportări trimestriale de la cele mai mari companii tech.", impact: "high", category: "earnings", regions: ["SUA"], affectedMarkets: ["Equities"] },
+    { id: "cat-4", date: fmt(4), time: "10:00 ET", title: "PMI Manufacturier Europa", description: "Indicator de activitate economică zona euro.", impact: "medium", category: "economic", regions: ["Europa"], affectedMarkets: ["Equities", "FX"] },
+    { id: "cat-5", date: fmt(5), time: "08:30 ET", title: "Jobless Claims SUA", description: "Cereri săptămânale de șomaj — puls pe piața muncii.", impact: "medium", category: "economic", regions: ["SUA"], affectedMarkets: ["Equities", "Bonds"] },
+  ];
+}
+
+// ============================================================================
+// PHASE 3: Advanced Scoring — get score breakdown for an article
+// ============================================================================
+export const getAdvancedScore = createServerFn({ method: "POST" })
+  .inputValidator((data: { id: string }) => data)
+  .handler(async ({ data }): Promise<{
+    scores: {
+      relevance: number;
+      urgency: number;
+      marketImpact: number;
+      confidence: number;
+      overall: number;
+    } | null;
+  }> => {
+    const all = newsCache?.items ?? SEED_NEWS;
+    const item = all.find((n) => n.id === data.id);
+    if (!item) return { scores: null };
+
+    // Heuristic scoring
+    const impW = item.impact === "high" ? 90 : item.impact === "medium" ? 60 : 30;
+    const ageMs = Date.now() - new Date(item.publishedAt).getTime();
+    const urgency = Math.max(10, 100 - Math.floor(ageMs / (1000 * 60 * 60) * 8));
+    const marketImpact = Math.min(100, item.themes.length * 15 + item.markets.length * 10 + (item.regions.length > 1 ? 15 : 0));
+    const confidence = item.status === "confirmed" ? 85 : item.status === "developing" ? 65 : 50;
+    const overall = Math.round(impW * 0.3 + urgency * 0.2 + marketImpact * 0.25 + confidence * 0.25);
+
+    return {
+      scores: {
+        relevance: item.relevanceScore,
+        urgency: Math.min(100, urgency),
+        marketImpact: Math.min(100, marketImpact),
+        confidence,
+        overall: Math.min(100, overall),
+      },
+    };
+  });
