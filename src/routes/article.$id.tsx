@@ -318,6 +318,21 @@ function ProseBlock({ text }: { text: string }) {
   );
 }
 
+function ScoreBar({ label, value }: { label: string; value: number }) {
+  const color = value >= 75 ? "bg-sentiment-positive" : value >= 50 ? "bg-impact-medium" : "bg-impact-low";
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[11px] text-muted-foreground">{label}</span>
+        <span className="text-xs font-semibold tabular-nums text-foreground">{value}</span>
+      </div>
+      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+        <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${value}%` }} />
+      </div>
+    </div>
+  );
+}
+
 function AnalysisSkeleton() {
   return (
     <div className="space-y-4">
