@@ -13,6 +13,8 @@ import { Route as WatchlistRouteImport } from './routes/watchlist'
 import { Route as ThemesRouteImport } from './routes/themes'
 import { Route as SavedRouteImport } from './routes/saved'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as CalendarRouteImport } from './routes/calendar'
+import { Route as BriefRouteImport } from './routes/brief'
 import { Route as AlertsRouteImport } from './routes/alerts'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
@@ -36,6 +38,16 @@ const SavedRoute = SavedRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CalendarRoute = CalendarRouteImport.update({
+  id: '/calendar',
+  path: '/calendar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BriefRoute = BriefRouteImport.update({
+  id: '/brief',
+  path: '/brief',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AlertsRoute = AlertsRouteImport.update({
@@ -63,6 +75,8 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/alerts': typeof AlertsRoute
+  '/brief': typeof BriefRoute
+  '/calendar': typeof CalendarRoute
   '/login': typeof LoginRoute
   '/saved': typeof SavedRoute
   '/themes': typeof ThemesRoute
@@ -73,6 +87,8 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/alerts': typeof AlertsRoute
+  '/brief': typeof BriefRoute
+  '/calendar': typeof CalendarRoute
   '/login': typeof LoginRoute
   '/saved': typeof SavedRoute
   '/themes': typeof ThemesRoute
@@ -84,6 +100,8 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/alerts': typeof AlertsRoute
+  '/brief': typeof BriefRoute
+  '/calendar': typeof CalendarRoute
   '/login': typeof LoginRoute
   '/saved': typeof SavedRoute
   '/themes': typeof ThemesRoute
@@ -96,6 +114,8 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/alerts'
+    | '/brief'
+    | '/calendar'
     | '/login'
     | '/saved'
     | '/themes'
@@ -106,6 +126,8 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/alerts'
+    | '/brief'
+    | '/calendar'
     | '/login'
     | '/saved'
     | '/themes'
@@ -116,6 +138,8 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/alerts'
+    | '/brief'
+    | '/calendar'
     | '/login'
     | '/saved'
     | '/themes'
@@ -127,6 +151,8 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
   AlertsRoute: typeof AlertsRoute
+  BriefRoute: typeof BriefRoute
+  CalendarRoute: typeof CalendarRoute
   LoginRoute: typeof LoginRoute
   SavedRoute: typeof SavedRoute
   ThemesRoute: typeof ThemesRoute
@@ -164,6 +190,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/calendar': {
+      id: '/calendar'
+      path: '/calendar'
+      fullPath: '/calendar'
+      preLoaderRoute: typeof CalendarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/brief': {
+      id: '/brief'
+      path: '/brief'
+      fullPath: '/brief'
+      preLoaderRoute: typeof BriefRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/alerts': {
       id: '/alerts'
       path: '/alerts'
@@ -199,6 +239,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   AlertsRoute: AlertsRoute,
+  BriefRoute: BriefRoute,
+  CalendarRoute: CalendarRoute,
   LoginRoute: LoginRoute,
   SavedRoute: SavedRoute,
   ThemesRoute: ThemesRoute,

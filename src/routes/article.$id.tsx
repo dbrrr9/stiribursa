@@ -1,13 +1,14 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { cn } from "@/lib/utils";
 import { ArrowLeft, ExternalLink, AlertCircle, Clock, TrendingUp } from "lucide-react";
 import { TerminalHeader } from "@/components/terminal/header";
 import { NewsCard } from "@/components/terminal/news-card";
 import { ImpactBadge, SentimentBadge, SourceBadge, StatusBadge, RelevanceBar, ScoreBadge } from "@/components/terminal/badges";
 import { formatTimestamp, timeAgo } from "@/components/terminal/clock";
 import { THEME_LABELS, type NewsItem, type ThemeTag, type MarketRegion } from "@/lib/news-types";
-import { analyzeArticle, getNewsItem, fetchLatestNews } from "@/lib/news.functions";
+import { analyzeArticle, getNewsItem, fetchLatestNews, getAdvancedScore } from "@/lib/news.functions";
 
 export const Route = createFileRoute("/article/$id")({
   loader: ({ params }) => getNewsItem({ data: { id: params.id } }),
@@ -90,8 +91,15 @@ function ArticlePage() {
     refetchOnWindowFocus: false,
   });
 
+  const { data: scoreData } = useQuery({
+    queryKey: ["score", item.id],
+    queryFn: () => getAdvancedScore({ data: { id: item.id } }),
+    staleTime: Infinity,
+  });
+
   const analysis = analysisData?.analysis;
   const analysisError = analysisData?.error;
+  const scores = scoreData?.scores;
 
   // Related stories logic
   const relatedStories = useMemo(() => {
@@ -175,6 +183,23 @@ function ArticlePage() {
             </div>
           </div>
         </header>
+
+        {/* ADVANCED SCORING */}
+        {scores && (
+          <section className="ms-card p-5 fade-up">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-xs font-semibold uppercase tracking-wider text-teal">Scoring Avansat</span>
+              <span className="h-px flex-1 bg-border" />
+              <span className="text-lg font-bold text-foreground tabular-nums">{scores.overall}<span className="text-xs text-muted-foreground">/100</span></span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <ScoreBar label="Relevanță" value={scores.relevance} />
+              <ScoreBar label="Urgență" value={scores.urgency} />
+              <ScoreBar label="Impact" value={scores.marketImpact} />
+              <ScoreBar label="Încredere" value={scores.confidence} />
+            </div>
+          </section>
+        )}
 
         {/* AI ANALYSIS */}
         {analysisLoading && <AnalysisSkeleton />}
@@ -291,6 +316,21 @@ function ProseBlock({ text }: { text: string }) {
         <p key={i} className="text-sm leading-relaxed text-foreground/80">{p}</p>
       ))}
     </>
+  );
+}
+
+function ScoreBar({ label, value }: { label: string; value: number }) {
+  const color = value >= 75 ? "bg-sentiment-positive" : value >= 50 ? "bg-impact-medium" : "bg-impact-low";
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[11px] text-muted-foreground">{label}</span>
+        <span className="text-xs font-semibold tabular-nums text-foreground">{value}</span>
+      </div>
+      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+        <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${value}%` }} />
+      </div>
+    </div>
   );
 }
 

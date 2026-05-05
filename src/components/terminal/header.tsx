@@ -24,6 +24,8 @@ export function TerminalHeader() {
 
           <nav className="hidden md:flex items-center gap-1">
             <NavItem to="/" label="Feed" exact />
+            <NavItem to="/brief" label="Brief" />
+            <NavItem to="/calendar" label="Calendar" />
             <NavItem to="/themes" label="Teme" />
             <NavItem to="/saved" label="Salvate" />
             <NavItem to="/watchlist" label="Watchlist" />

@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
@@ -9,7 +9,7 @@ import { FilterBar, type FilterState, type SortMode } from "@/components/termina
 import { NewsCard, NewsCardSkeleton } from "@/components/terminal/news-card";
 import { fetchLatestNews } from "@/lib/news.functions";
 import { CustomAnalyzer } from "@/components/terminal/custom-analyzer";
-import { Zap, TrendingUp, BarChart3, Lightbulb, ArrowRight } from "lucide-react";
+import { Zap, TrendingUp, BarChart3, Newspaper, CalendarDays, ArrowRight } from "lucide-react";
 import type { NewsSource, ThemeTag, ImpactLevel, NewsItem } from "@/lib/news-types";
 
 const searchSchema = z.object({
@@ -116,7 +116,33 @@ function HomePage() {
           </p>
         </section>
 
-        {/* TOP STORIES — only when no active filters */}
+        {/* QUICK ACCESS — Phase 3 features */}
+        {!hasActiveFilters && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 fade-up">
+            <Link to="/brief" className="ms-card p-4 flex items-center gap-3 group hover:border-teal/30">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal/10 text-teal">
+                <Newspaper className="h-4 w-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold text-foreground group-hover:text-teal transition-colors">Daily Brief</div>
+                <div className="text-xs text-muted-foreground">Rezumatul zilnic AI al piețelor</div>
+              </div>
+              <ArrowRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-teal transition-colors" />
+            </Link>
+            <Link to="/calendar" className="ms-card p-4 flex items-center gap-3 group hover:border-teal/30">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-navy/10 text-navy">
+                <CalendarDays className="h-4 w-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold text-foreground group-hover:text-teal transition-colors">Catalyst Calendar</div>
+                <div className="text-xs text-muted-foreground">Evenimente care mișcă piețele</div>
+              </div>
+              <ArrowRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-teal transition-colors" />
+            </Link>
+          </div>
+        )}
+
+
         {!hasActiveFilters && !isLoading && topStories.length > 0 && (
           <SectionBlock icon={<Zap className="h-3.5 w-3.5" />} title="Top Stories" subtitle="Cele mai importante știri acum">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
