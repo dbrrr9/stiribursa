@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
@@ -9,7 +9,7 @@ import { FilterBar, type FilterState, type SortMode } from "@/components/termina
 import { NewsCard, NewsCardSkeleton } from "@/components/terminal/news-card";
 import { fetchLatestNews } from "@/lib/news.functions";
 import { CustomAnalyzer } from "@/components/terminal/custom-analyzer";
-import { Zap, TrendingUp, BarChart3, Lightbulb, ArrowRight } from "lucide-react";
+import { Zap, TrendingUp, BarChart3, Newspaper, CalendarDays, ArrowRight } from "lucide-react";
 import type { NewsSource, ThemeTag, ImpactLevel, NewsItem } from "@/lib/news-types";
 
 const searchSchema = z.object({
