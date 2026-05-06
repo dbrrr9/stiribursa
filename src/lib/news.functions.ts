@@ -26,65 +26,44 @@ let dailyBriefCache: { brief: DailyBrief; ts: number } | null = null;
 // ============================================================================
 type FeedTier = "primary" | "secondary";
 const RSS_FEEDS: { source: NewsSource; url: string; tier: FeedTier }[] = [
-  // === REUTERS — multiple queries for breadth ===
-  {
-    source: "Reuters",
-    url: "https://news.google.com/rss/search?q=site:reuters.com+(markets+OR+stocks+OR+economy+OR+fed+OR+earnings)&hl=en-US&gl=US&ceid=US:en",
-    tier: "primary",
-  },
-  {
-    source: "Reuters",
-    url: "https://news.google.com/rss/search?q=site:reuters.com+(iran+OR+sanctions+OR+war+OR+geopolitics+OR+tariff+OR+trade+war+OR+middle+east)&hl=en-US&gl=US&ceid=US:en",
-    tier: "primary",
-  },
-  {
-    source: "Reuters",
-    url: "https://news.google.com/rss/search?q=site:reuters.com+(oil+OR+gold+OR+treasury+OR+inflation+OR+recession+OR+china+OR+russia)&hl=en-US&gl=US&ceid=US:en",
-    tier: "primary",
-  },
-  {
-    source: "Reuters",
-    url: "https://news.google.com/rss/search?q=site:reuters.com+(nuclear+OR+deal+OR+sanctions+OR+drone+OR+attack+OR+military+OR+defense)&hl=en-US&gl=US&ceid=US:en",
-    tier: "primary",
-  },
+  // === REUTERS — broad coverage ===
+  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+(markets+OR+stocks+OR+economy+OR+fed+OR+earnings)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
+  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+(iran+OR+sanctions+OR+war+OR+geopolitics+OR+tariff+OR+trade+war+OR+middle+east)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
+  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+(oil+OR+gold+OR+treasury+OR+inflation+OR+recession+OR+china+OR+russia)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
+  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+(nuclear+OR+deal+OR+sanctions+OR+drone+OR+attack+OR+military+OR+defense)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
+  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+(tech+OR+AI+OR+semiconductor+OR+Intel+OR+AMD+OR+Nvidia+OR+Micron+OR+Apple+OR+Microsoft)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
+  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+(OPEC+OR+energy+OR+natural+gas+OR+crude+OR+brent+OR+petroleum)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
+  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+(Trump+OR+Biden+OR+congress+OR+tariff+OR+trade+OR+policy)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
 
-  // === BLOOMBERG — multiple queries ===
-  {
-    source: "Bloomberg",
-    url: "https://news.google.com/rss/search?q=site:bloomberg.com+(markets+OR+stocks+OR+economy+OR+fed+OR+earnings+OR+oil+OR+gold)&hl=en-US&gl=US&ceid=US:en",
-    tier: "primary",
-  },
-  {
-    source: "Bloomberg",
-    url: "https://news.google.com/rss/search?q=site:bloomberg.com+(iran+OR+sanctions+OR+war+OR+geopolitics+OR+tariff+OR+trade+OR+defense)&hl=en-US&gl=US&ceid=US:en",
-    tier: "primary",
-  },
-  {
-    source: "Bloomberg",
-    url: "https://news.google.com/rss/search?q=site:bloomberg.com+(crypto+OR+bitcoin+OR+inflation+OR+recession+OR+china+OR+treasury)&hl=en-US&gl=US&ceid=US:en",
-    tier: "secondary",
-  },
+  // === BLOOMBERG — broad coverage ===
+  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+(markets+OR+stocks+OR+economy+OR+fed+OR+earnings+OR+oil+OR+gold)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
+  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+(iran+OR+sanctions+OR+war+OR+geopolitics+OR+tariff+OR+trade+OR+defense)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
+  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+(crypto+OR+bitcoin+OR+inflation+OR+recession+OR+china+OR+treasury)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
+  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+(tech+OR+semiconductor+OR+Intel+OR+AMD+OR+Nvidia+OR+Micron+OR+AI+OR+Apple)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
+  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+(OPEC+OR+energy+OR+oil+OR+gold+OR+commodities+OR+copper+OR+silver)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
+  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+(Trump+OR+Biden+OR+election+OR+congress+OR+policy+OR+regulation)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
 
   // === Yahoo Finance ===
   { source: "Yahoo Finance", url: "https://finance.yahoo.com/news/rssindex", tier: "primary" },
-  {
-    source: "Yahoo Finance",
-    url: "https://news.google.com/rss/search?q=site:finance.yahoo.com+(markets+OR+stocks+OR+earnings+OR+economy)&hl=en-US&gl=US&ceid=US:en",
-    tier: "primary",
-  },
+  { source: "Yahoo Finance", url: "https://news.google.com/rss/search?q=site:finance.yahoo.com+(markets+OR+stocks+OR+earnings+OR+economy)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
+  { source: "Yahoo Finance", url: "https://news.google.com/rss/search?q=site:finance.yahoo.com+(oil+OR+gold+OR+tech+OR+Iran+OR+war+OR+tariff)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
 
   // === CNBC ===
   { source: "CNBC", url: "https://www.cnbc.com/id/10000664/device/rss/rss.html", tier: "primary" },
-  { source: "CNBC", url: "https://www.cnbc.com/id/10001147/device/rss/rss.html", tier: "primary" }, // World
+  { source: "CNBC", url: "https://www.cnbc.com/id/10001147/device/rss/rss.html", tier: "primary" },
+  { source: "CNBC", url: "https://www.cnbc.com/id/19854910/device/rss/rss.html", tier: "secondary" }, // Technology
+  { source: "CNBC", url: "https://www.cnbc.com/id/20910258/device/rss/rss.html", tier: "secondary" }, // Energy
+  { source: "CNBC", url: "https://news.google.com/rss/search?q=site:cnbc.com+(Iran+OR+oil+OR+war+OR+tariff+OR+semiconductor)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
 
   // === MarketWatch ===
   { source: "MarketWatch", url: "https://feeds.content.dowjones.io/public/rss/mw_topstories", tier: "primary" },
   { source: "MarketWatch", url: "https://feeds.content.dowjones.io/public/rss/mw_marketpulse", tier: "secondary" },
+  { source: "MarketWatch", url: "https://news.google.com/rss/search?q=site:marketwatch.com+(markets+OR+stocks+OR+oil+OR+gold+OR+tech+OR+fed)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
 ];
 
-const TARGET_TOTAL = 80; // more news
-const MAX_AGE_MS = 1000 * 60 * 60 * 36; // 36h for broader coverage
-const MIN_RELEVANCE = 40; // lower threshold to catch more geopolitical news
+const TARGET_TOTAL = 120;
+const MAX_AGE_MS = 1000 * 60 * 60 * 48; // 48h
+const MIN_RELEVANCE = 35;
 
 // ============================================================================
 // AI helper
@@ -165,6 +144,22 @@ function decodeEntities(s: string): string {
     .trim();
 }
 
+/** Strip residual HTML attributes like href="...", class="...", style="...", and bare URLs in text */
+function cleanText(s: string): string {
+  return s
+    // Remove href="...", src="...", class="..." etc
+    .replace(/(href|src|class|style|id|rel|target|data-\w+)\s*=\s*["'][^"']*["']/gi, "")
+    // Remove leftover angle-bracket fragments like <a ... > without closing
+    .replace(/<\/?[a-z][a-z0-9]*[^>]*>/gi, " ")
+    // Remove bare URLs that look like artifacts (not standalone links)
+    .replace(/https?:\/\/[^\s"')]+/g, "")
+    // Clean up punctuation artifacts
+    .replace(/\(\s*\)/g, "")
+    .replace(/\[\s*\]/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 function extractTag(block: string, tag: string): string {
   const re = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, "i");
   const m = block.match(re);
@@ -230,15 +225,17 @@ async function fetchRSSFeed(url: string, source: NewsSource): Promise<RawArticle
 // CLASSIFICATION — expanded keywords for geopolitics
 // ============================================================================
 const THEME_KEYWORDS: Record<ThemeTag, string[]> = {
-  actiuni: ["stock", "shares", "equity", "equities", "nasdaq", "s&p", "dow", "ipo", "listing", "rally", "selloff", "sell-off"],
+  actiuni: ["stock", "shares", "equity", "equities", "nasdaq", "s&p", "dow", "ipo", "listing", "rally", "selloff", "sell-off",
+    "intel", "amd", "nvidia", "micron", "apple", "microsoft", "google", "amazon", "meta", "tesla", "tsmc", "qualcomm",
+    "broadcom", "semiconductor", "chip", "ai stock"],
   obligatiuni: ["bond", "yield", "treasury", "treasuries", "credit", "debt", "coupon", "spread"],
-  indici: ["index", "indices", "s&p 500", "nasdaq", "dow jones", "ftse", "dax", "nikkei", "hang seng", "stoxx"],
-  forex: ["dollar", "euro", "yen", "currency", "forex", "fx", "exchange rate", "yuan", "sterling", "usd", "eur"],
-  marfuri: ["oil", "gold", "silver", "copper", "wheat", "gas", "commodit", "brent", "wti", "opec", "natural gas", "lng", "uranium"],
-  crypto: ["bitcoin", "btc", "ethereum", "eth", "crypto", "blockchain", "stablecoin", "binance", "coinbase", "defi"],
-  macro: ["inflation", "gdp", "cpi", "ppi", "unemployment", "jobs", "recession", "growth", "pmi", "consumer", "retail sales", "housing"],
-  earnings: ["earnings", "revenue", "profit", "guidance", "quarter", "results", "beats", "misses", "forecast", "outlook"],
-  "banci-centrale": ["fed", "ecb", "boe", "boj", "powell", "lagarde", "rate", "hike", "cut", "fomc", "interest rate", "monetary policy", "tightening", "easing"],
+  indici: ["index", "indices", "s&p 500", "nasdaq", "dow jones", "ftse", "dax", "nikkei", "hang seng", "stoxx", "russell"],
+  forex: ["dollar", "euro", "yen", "currency", "forex", "fx", "exchange rate", "yuan", "sterling", "usd", "eur", "dxy"],
+  marfuri: ["oil", "gold", "silver", "copper", "wheat", "gas", "commodit", "brent", "wti", "opec", "natural gas", "lng", "uranium", "platinum", "palladium", "lithium"],
+  crypto: ["bitcoin", "btc", "ethereum", "eth", "crypto", "blockchain", "stablecoin", "binance", "coinbase", "defi", "solana", "xrp"],
+  macro: ["inflation", "gdp", "cpi", "ppi", "unemployment", "jobs", "recession", "growth", "pmi", "consumer", "retail sales", "housing", "nonfarm", "jobless claims"],
+  earnings: ["earnings", "revenue", "profit", "guidance", "quarter", "results", "beats", "misses", "forecast", "outlook", "eps", "ebitda"],
+  "banci-centrale": ["fed", "ecb", "boe", "boj", "powell", "lagarde", "rate", "hike", "cut", "fomc", "interest rate", "monetary policy", "tightening", "easing", "hawkish", "dovish"],
   geopolitica: [
     "war", "ukraine", "russia", "china", "tariff", "sanction", "iran", "trade war", "election",
     "nuclear", "missile", "drone", "attack", "military", "defense", "conflict", "tension",
@@ -247,6 +244,9 @@ const THEME_KEYWORDS: Record<ThemeTag, string[]> = {
     "trump", "biden", "xi jinping", "putin", "khamenei", "netanyahu",
     "strait of hormuz", "persian gulf", "south china sea", "taiwan",
     "coup", "regime", "embargo", "blockade", "proxy war",
+    "iran nuclear", "iran deal", "iaea", "enrichment", "centrifuge",
+    "us iran", "iran sanctions", "iran oil", "tehran", "washington",
+    "strike", "retaliation", "escalation", "de-escalation",
   ],
 };
 
@@ -356,14 +356,14 @@ function classifyArticle(raw: RawArticle, idx: number): NewsItem | null {
     publishedAt = new Date(Date.now() - idx * 60_000).toISOString();
   }
 
-  const cleanDesc = raw.description.slice(0, 280).trim();
-  const summary = cleanDesc.length > 30 ? cleanDesc : raw.title;
+    const cleanDesc = cleanText(raw.description.slice(0, 400)).slice(0, 280).trim();
+    const summary = cleanDesc.length > 30 ? cleanDesc : cleanText(raw.title);
 
   const id = `${raw.source.toLowerCase().replace(/[^a-z]/g, "")}-${hashString(raw.link || raw.title)}`;
 
   return {
     id,
-    title: raw.title,
+    title: cleanText(raw.title),
     source: raw.source,
     url: raw.link,
     publishedAt,
@@ -704,6 +704,10 @@ export interface DailyBrief {
   marketOverview: string;
   topThemes: { theme: string; summary: string; sentiment: Sentiment }[];
   keyEvents: { time: string; event: string; impact: ImpactLevel }[];
+  sectorPerformance: { sector: string; direction: "up" | "down" | "flat"; detail: string }[];
+  commodities: { name: string; direction: "up" | "down" | "flat"; detail: string }[];
+  techHighlights: { company: string; detail: string; sentiment: Sentiment }[];
+  geopoliticalUpdate: string;
   outlook: string;
   generatedAt: string;
 }
@@ -711,20 +715,60 @@ export interface DailyBrief {
 const DAILY_BRIEF_SCHEMA = {
   type: "object",
   properties: {
-    marketOverview: { type: "string", description: "2-3 paragrafe cu un rezumat general al piețelor azi, în română." },
+    marketOverview: { type: "string", description: "3-4 paragrafe cu un rezumat detaliat al piețelor azi, în română. Include mișcări concrete ale S&P 500, Nasdaq, Dow Jones, FTSE, DAX cu procente." },
     topThemes: {
       type: "array",
       items: {
         type: "object",
         properties: {
           theme: { type: "string" },
-          summary: { type: "string" },
+          summary: { type: "string", description: "Rezumat detaliat cu date concrete — prețuri, procente, comparații." },
           sentiment: { type: "string", enum: ["positive", "negative", "mixed", "uncertain"] },
         },
         required: ["theme", "summary", "sentiment"],
       },
-      description: "3-5 teme dominante ale zilei cu rezumat scurt.",
+      description: "5-7 teme dominante ale zilei cu rezumat detaliat.",
     },
+    sectorPerformance: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          sector: { type: "string", description: "ex: Tehnologie, Energie, Financiar, Healthcare, Industrial" },
+          direction: { type: "string", enum: ["up", "down", "flat"] },
+          detail: { type: "string", description: "1-2 propoziții cu companii specifice, procente, cauze." },
+        },
+        required: ["sector", "direction", "detail"],
+      },
+      description: "Performanța pe 5-8 sectoare principale.",
+    },
+    commodities: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "ex: Petrol Brent, Petrol WTI, Aur, Argint, Cupru, Gaz Natural" },
+          direction: { type: "string", enum: ["up", "down", "flat"] },
+          detail: { type: "string", description: "Preț curent estimat, variație %, ce a influențat mișcarea." },
+        },
+        required: ["name", "direction", "detail"],
+      },
+      description: "Mărfuri principale (4-6 intrări).",
+    },
+    techHighlights: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          company: { type: "string", description: "ex: Intel, AMD, Nvidia, Micron, Apple, Microsoft, Tesla, TSMC" },
+          detail: { type: "string", description: "Ce s-a întâmplat, mișcare de preț, context." },
+          sentiment: { type: "string", enum: ["positive", "negative", "mixed", "uncertain"] },
+        },
+        required: ["company", "detail", "sentiment"],
+      },
+      description: "4-8 companii tech/semiconductor relevante.",
+    },
+    geopoliticalUpdate: { type: "string", description: "2-3 paragrafe detaliate: Iran/SUA, Orientul Mijlociu, Ucraina/Rusia, tensiuni China/Taiwan. Impact pe piețe, petrol, dolar." },
     keyEvents: {
       type: "array",
       items: {
@@ -736,45 +780,43 @@ const DAILY_BRIEF_SCHEMA = {
         },
         required: ["time", "event", "impact"],
       },
-      description: "Evenimente cheie de urmărit azi/mâine.",
+      description: "5-10 evenimente cheie de urmărit.",
     },
-    outlook: { type: "string", description: "1-2 paragrafe — perspectivă pe termen scurt pentru investitori." },
+    outlook: { type: "string", description: "2-3 paragrafe — perspectivă pe termen scurt cu scenarii concrete." },
   },
-  required: ["marketOverview", "topThemes", "keyEvents", "outlook"],
+  required: ["marketOverview", "topThemes", "sectorPerformance", "commodities", "techHighlights", "geopoliticalUpdate", "keyEvents", "outlook"],
 };
 
 export const getDailyBrief = createServerFn({ method: "GET" }).handler(async (): Promise<{ brief: DailyBrief | null; error?: string }> => {
-  // Cache 2h
-  if (dailyBriefCache && Date.now() - dailyBriefCache.ts < 1000 * 60 * 120) {
+  if (dailyBriefCache && Date.now() - dailyBriefCache.ts < 1000 * 60 * 60) {
     return { brief: dailyBriefCache.brief };
   }
 
-  // Need current news for context
   const newsData = newsCache?.items ?? SEED_NEWS;
-  const topNews = newsData.slice(0, 20);
+  const topNews = newsData.slice(0, 40);
 
   if (!process.env.LOVABLE_API_KEY) {
     const fallback: DailyBrief = {
       date: new Date().toISOString().split("T")[0],
-      marketOverview: "Briefing-ul zilnic necesită AI activat. Verifică setările Lovable Cloud.",
-      topThemes: topNews.slice(0, 3).map(n => ({
-        theme: n.themes[0] ?? "general",
-        summary: n.title,
-        sentiment: n.sentiment,
-      })),
+      marketOverview: "Briefing-ul zilnic necesită AI activat.",
+      topThemes: topNews.slice(0, 3).map(n => ({ theme: n.themes[0] ?? "general", summary: n.title, sentiment: n.sentiment })),
       keyEvents: [],
-      outlook: "Activează AI pentru un rezumat complet al piețelor.",
+      sectorPerformance: [],
+      commodities: [],
+      techHighlights: [],
+      geopoliticalUpdate: "Activează AI pentru actualizări geopolitice.",
+      outlook: "Activează AI pentru un rezumat complet.",
       generatedAt: new Date().toISOString(),
     };
     return { brief: fallback };
   }
 
   const newsSummary = topNews.map((n, i) =>
-    `${i + 1}. [${n.source}] ${n.title} — Impact: ${n.impact}, Sentiment: ${n.sentiment}, Teme: ${n.themes.join(", ")}`
+    `${i + 1}. [${n.source}] ${n.title} — Impact: ${n.impact}, Sentiment: ${n.sentiment}, Teme: ${n.themes.join(", ")}, Regiuni: ${n.regions.join(", ")}`
   ).join("\n");
 
-  const sys = `Ești un analist financiar senior care scrie briefing-uri zilnice de piață în limba română. Scrii clar, profesionist, condensat. Focus pe ce contează pentru un investitor activ.`;
-  const usr = `Pe baza acestor știri recente, generează un briefing zilnic complet:\n\n${newsSummary}\n\nData: ${new Date().toLocaleDateString("ro-RO", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}`;
+  const sys = `Ești un analist financiar senior la o firmă de investment banking. Scrii briefing-uri zilnice premium în limba română pentru investitori profesioniști. Stilul: precis, cu date concrete (prețuri, procente, valori), fără generalități. Menționezi companii specifice, mișcări de preț concrete, cauze exacte. Focus special pe: Iran/SUA, OPEC, Fed, earnings tech, semiconductori.`;
+  const usr = `Generează un briefing zilnic PREMIUM pe baza acestor ${topNews.length} știri recente:\n\n${newsSummary}\n\nData: ${new Date().toLocaleDateString("ro-RO", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}\n\nIMPORTANT: Fii FOARTE specific cu date, prețuri, procente. Menționează Intel, AMD, Nvidia, Micron, Apple, Microsoft individual. Detalii concrete despre petrol (Brent, WTI), aur, argint. Situația Iran/SUA în detaliu. Performanța pe FIECARE sector major.`;
 
   try {
     const result = await callAI(usr, sys, DAILY_BRIEF_SCHEMA);
@@ -782,6 +824,10 @@ export const getDailyBrief = createServerFn({ method: "GET" }).handler(async ():
       const brief: DailyBrief = {
         date: new Date().toISOString().split("T")[0],
         ...result,
+        sectorPerformance: result.sectorPerformance ?? [],
+        commodities: result.commodities ?? [],
+        techHighlights: result.techHighlights ?? [],
+        geopoliticalUpdate: result.geopoliticalUpdate ?? "",
         generatedAt: new Date().toISOString(),
       };
       dailyBriefCache = { brief, ts: Date.now() };

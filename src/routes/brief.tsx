@@ -2,7 +2,10 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { TerminalHeader } from "@/components/terminal/header";
 import { getDailyBrief } from "@/lib/news.functions";
-import { Newspaper, TrendingUp, Calendar, Eye, Loader2, AlertCircle } from "lucide-react";
+import {
+  Newspaper, TrendingUp, Calendar, Eye, Loader2, AlertCircle,
+  Cpu, Droplets, BarChart3, Globe2, ArrowUpRight, ArrowDownRight, Minus,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Sentiment } from "@/lib/news-types";
 
@@ -39,7 +42,7 @@ function BriefPage() {
             Briefing-ul <span className="text-teal">Zilnic</span>
           </h1>
           <p className="text-muted-foreground text-sm">
-            Rezumat AI al piețelor — ce s-a întâmplat, ce contează, ce urmează.
+            Rezumat AI premium — piețe, sectoare, mărfuri, tech, geopolitică.
           </p>
         </div>
 
@@ -95,6 +98,86 @@ function BriefPage() {
               </div>
             </section>
 
+            {/* Sector Performance */}
+            {brief.sectorPerformance.length > 0 && (
+              <section className="ms-card p-6 fade-up">
+                <div className="flex items-center gap-2 mb-4">
+                  <BarChart3 className="h-4 w-4 text-teal" />
+                  <h2 className="text-sm font-semibold uppercase tracking-wide">Performanță Sectoare</h2>
+                  <span className="h-px flex-1 bg-border" />
+                </div>
+                <div className="space-y-2.5">
+                  {brief.sectorPerformance.map((s, i) => (
+                    <div key={i} className="flex items-start gap-3 p-3 rounded-lg border border-border">
+                      <DirectionIcon dir={s.direction} />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-semibold text-foreground">{s.sector}</div>
+                        <p className="text-sm text-muted-foreground leading-relaxed">{s.detail}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Commodities */}
+            {brief.commodities.length > 0 && (
+              <section className="ms-card p-6 fade-up">
+                <div className="flex items-center gap-2 mb-4">
+                  <Droplets className="h-4 w-4 text-teal" />
+                  <h2 className="text-sm font-semibold uppercase tracking-wide">Mărfuri</h2>
+                  <span className="h-px flex-1 bg-border" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {brief.commodities.map((c, i) => (
+                    <div key={i} className="flex items-start gap-3 p-3 rounded-lg border border-border">
+                      <DirectionIcon dir={c.direction} />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-semibold text-foreground">{c.name}</div>
+                        <p className="text-sm text-muted-foreground leading-relaxed">{c.detail}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Tech Highlights */}
+            {brief.techHighlights.length > 0 && (
+              <section className="ms-card p-6 fade-up">
+                <div className="flex items-center gap-2 mb-4">
+                  <Cpu className="h-4 w-4 text-teal" />
+                  <h2 className="text-sm font-semibold uppercase tracking-wide">Tech & Semiconductori</h2>
+                  <span className="h-px flex-1 bg-border" />
+                </div>
+                <div className="space-y-2.5">
+                  {brief.techHighlights.map((t, i) => (
+                    <div key={i} className="flex gap-3 p-3 rounded-lg border border-border">
+                      <SentimentDot sentiment={t.sentiment} />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-semibold text-foreground">{t.company}</div>
+                        <p className="text-sm text-muted-foreground leading-relaxed">{t.detail}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Geopolitical Update */}
+            {brief.geopoliticalUpdate && (
+              <section className="ms-card p-6 border-impact-high/10 bg-impact-high/[0.02] fade-up">
+                <div className="flex items-center gap-2 mb-4">
+                  <Globe2 className="h-4 w-4 text-impact-high" />
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-impact-high">Geopolitică</h2>
+                  <span className="h-px flex-1 bg-impact-high/10" />
+                </div>
+                {brief.geopoliticalUpdate.split(/\n\n+/).map((p, i) => (
+                  <p key={i} className="text-sm leading-relaxed text-foreground/80 mb-3">{p}</p>
+                ))}
+              </section>
+            )}
+
             {/* Key Events */}
             {brief.keyEvents.length > 0 && (
               <section className="ms-card p-6 fade-up">
@@ -148,4 +231,10 @@ function SentimentDot({ sentiment }: { sentiment: Sentiment }) {
     uncertain: "bg-muted-foreground",
   };
   return <span className={cn("w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1", colors[sentiment])} />;
+}
+
+function DirectionIcon({ dir }: { dir: "up" | "down" | "flat" }) {
+  if (dir === "up") return <ArrowUpRight className="h-4 w-4 text-sentiment-positive flex-shrink-0 mt-0.5" />;
+  if (dir === "down") return <ArrowDownRight className="h-4 w-4 text-sentiment-negative flex-shrink-0 mt-0.5" />;
+  return <Minus className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />;
 }
