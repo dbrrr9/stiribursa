@@ -225,15 +225,17 @@ async function fetchRSSFeed(url: string, source: NewsSource): Promise<RawArticle
 // CLASSIFICATION — expanded keywords for geopolitics
 // ============================================================================
 const THEME_KEYWORDS: Record<ThemeTag, string[]> = {
-  actiuni: ["stock", "shares", "equity", "equities", "nasdaq", "s&p", "dow", "ipo", "listing", "rally", "selloff", "sell-off"],
+  actiuni: ["stock", "shares", "equity", "equities", "nasdaq", "s&p", "dow", "ipo", "listing", "rally", "selloff", "sell-off",
+    "intel", "amd", "nvidia", "micron", "apple", "microsoft", "google", "amazon", "meta", "tesla", "tsmc", "qualcomm",
+    "broadcom", "semiconductor", "chip", "ai stock"],
   obligatiuni: ["bond", "yield", "treasury", "treasuries", "credit", "debt", "coupon", "spread"],
-  indici: ["index", "indices", "s&p 500", "nasdaq", "dow jones", "ftse", "dax", "nikkei", "hang seng", "stoxx"],
-  forex: ["dollar", "euro", "yen", "currency", "forex", "fx", "exchange rate", "yuan", "sterling", "usd", "eur"],
-  marfuri: ["oil", "gold", "silver", "copper", "wheat", "gas", "commodit", "brent", "wti", "opec", "natural gas", "lng", "uranium"],
-  crypto: ["bitcoin", "btc", "ethereum", "eth", "crypto", "blockchain", "stablecoin", "binance", "coinbase", "defi"],
-  macro: ["inflation", "gdp", "cpi", "ppi", "unemployment", "jobs", "recession", "growth", "pmi", "consumer", "retail sales", "housing"],
-  earnings: ["earnings", "revenue", "profit", "guidance", "quarter", "results", "beats", "misses", "forecast", "outlook"],
-  "banci-centrale": ["fed", "ecb", "boe", "boj", "powell", "lagarde", "rate", "hike", "cut", "fomc", "interest rate", "monetary policy", "tightening", "easing"],
+  indici: ["index", "indices", "s&p 500", "nasdaq", "dow jones", "ftse", "dax", "nikkei", "hang seng", "stoxx", "russell"],
+  forex: ["dollar", "euro", "yen", "currency", "forex", "fx", "exchange rate", "yuan", "sterling", "usd", "eur", "dxy"],
+  marfuri: ["oil", "gold", "silver", "copper", "wheat", "gas", "commodit", "brent", "wti", "opec", "natural gas", "lng", "uranium", "platinum", "palladium", "lithium"],
+  crypto: ["bitcoin", "btc", "ethereum", "eth", "crypto", "blockchain", "stablecoin", "binance", "coinbase", "defi", "solana", "xrp"],
+  macro: ["inflation", "gdp", "cpi", "ppi", "unemployment", "jobs", "recession", "growth", "pmi", "consumer", "retail sales", "housing", "nonfarm", "jobless claims"],
+  earnings: ["earnings", "revenue", "profit", "guidance", "quarter", "results", "beats", "misses", "forecast", "outlook", "eps", "ebitda"],
+  "banci-centrale": ["fed", "ecb", "boe", "boj", "powell", "lagarde", "rate", "hike", "cut", "fomc", "interest rate", "monetary policy", "tightening", "easing", "hawkish", "dovish"],
   geopolitica: [
     "war", "ukraine", "russia", "china", "tariff", "sanction", "iran", "trade war", "election",
     "nuclear", "missile", "drone", "attack", "military", "defense", "conflict", "tension",
@@ -242,6 +244,9 @@ const THEME_KEYWORDS: Record<ThemeTag, string[]> = {
     "trump", "biden", "xi jinping", "putin", "khamenei", "netanyahu",
     "strait of hormuz", "persian gulf", "south china sea", "taiwan",
     "coup", "regime", "embargo", "blockade", "proxy war",
+    "iran nuclear", "iran deal", "iaea", "enrichment", "centrifuge",
+    "us iran", "iran sanctions", "iran oil", "tehran", "washington",
+    "strike", "retaliation", "escalation", "de-escalation",
   ],
 };
 
