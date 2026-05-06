@@ -144,6 +144,22 @@ function decodeEntities(s: string): string {
     .trim();
 }
 
+/** Strip residual HTML attributes like href="...", class="...", style="...", and bare URLs in text */
+function cleanText(s: string): string {
+  return s
+    // Remove href="...", src="...", class="..." etc
+    .replace(/(href|src|class|style|id|rel|target|data-\w+)\s*=\s*["'][^"']*["']/gi, "")
+    // Remove leftover angle-bracket fragments like <a ... > without closing
+    .replace(/<\/?[a-z][a-z0-9]*[^>]*>/gi, " ")
+    // Remove bare URLs that look like artifacts (not standalone links)
+    .replace(/https?:\/\/[^\s"')]+/g, "")
+    // Clean up punctuation artifacts
+    .replace(/\(\s*\)/g, "")
+    .replace(/\[\s*\]/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 function extractTag(block: string, tag: string): string {
   const re = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, "i");
   const m = block.match(re);
