@@ -1,6 +1,5 @@
 import { Outlet, Link, createRootRouteWithContext, HeadContent, Scripts } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { PasswordGate } from "@/components/terminal/password-gate";
 import { AuthProvider } from "@/hooks/use-auth";
 
 import appCss from "../styles.css?url";
@@ -69,6 +68,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
+        <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem('ms_theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme:dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}})()` }} />
         {children}
         <Scripts />
       </body>
@@ -81,9 +81,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <PasswordGate>
-          <Outlet />
-        </PasswordGate>
+        <Outlet />
       </AuthProvider>
     </QueryClientProvider>
   );
