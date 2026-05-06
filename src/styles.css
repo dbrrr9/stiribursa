@@ -173,7 +173,12 @@
     color: oklch(0.15 0.03 255);
   }
 
-  /* Scrollbar — subtle light */
+  .dark ::selection {
+    background: oklch(0.55 0.12 195 / 0.3);
+    color: oklch(0.95 0.01 70);
+  }
+
+  /* Scrollbar — subtle */
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb {
@@ -181,6 +186,9 @@
     border-radius: 4px;
   }
   ::-webkit-scrollbar-thumb:hover { background: oklch(0.7 0.01 70); }
+
+  .dark ::-webkit-scrollbar-thumb { background: oklch(0.3 0.01 255); }
+  .dark ::-webkit-scrollbar-thumb:hover { background: oklch(0.4 0.01 255); }
 }
 
 @layer components {
