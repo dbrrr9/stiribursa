@@ -274,6 +274,6 @@
     color: var(--muted-foreground);
   }
 
-  .prose-finance p { line-height: 1.75; color: oklch(0.3 0.02 255); margin-bottom: 1rem; }
+  .prose-finance p { line-height: 1.75; color: var(--foreground); opacity: 0.85; margin-bottom: 1rem; }
   .prose-finance strong { color: var(--navy); font-weight: 600; }
 }
