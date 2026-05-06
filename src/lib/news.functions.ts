@@ -351,8 +351,8 @@ function classifyArticle(raw: RawArticle, idx: number): NewsItem | null {
     publishedAt = new Date(Date.now() - idx * 60_000).toISOString();
   }
 
-  const cleanDesc = raw.description.slice(0, 280).trim();
-  const summary = cleanDesc.length > 30 ? cleanDesc : raw.title;
+    const cleanDesc = cleanText(raw.description.slice(0, 400)).slice(0, 280).trim();
+    const summary = cleanDesc.length > 30 ? cleanDesc : cleanText(raw.title);
 
   const id = `${raw.source.toLowerCase().replace(/[^a-z]/g, "")}-${hashString(raw.link || raw.title)}`;
 
