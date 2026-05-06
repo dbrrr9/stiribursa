@@ -704,6 +704,10 @@ export interface DailyBrief {
   marketOverview: string;
   topThemes: { theme: string; summary: string; sentiment: Sentiment }[];
   keyEvents: { time: string; event: string; impact: ImpactLevel }[];
+  sectorPerformance: { sector: string; direction: "up" | "down" | "flat"; detail: string }[];
+  commodities: { name: string; direction: "up" | "down" | "flat"; detail: string }[];
+  techHighlights: { company: string; detail: string; sentiment: Sentiment }[];
+  geopoliticalUpdate: string;
   outlook: string;
   generatedAt: string;
 }
