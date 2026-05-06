@@ -788,37 +788,35 @@ const DAILY_BRIEF_SCHEMA = {
 };
 
 export const getDailyBrief = createServerFn({ method: "GET" }).handler(async (): Promise<{ brief: DailyBrief | null; error?: string }> => {
-  // Cache 2h
-  if (dailyBriefCache && Date.now() - dailyBriefCache.ts < 1000 * 60 * 120) {
+  if (dailyBriefCache && Date.now() - dailyBriefCache.ts < 1000 * 60 * 60) {
     return { brief: dailyBriefCache.brief };
   }
 
-  // Need current news for context
   const newsData = newsCache?.items ?? SEED_NEWS;
-  const topNews = newsData.slice(0, 20);
+  const topNews = newsData.slice(0, 40);
 
   if (!process.env.LOVABLE_API_KEY) {
     const fallback: DailyBrief = {
       date: new Date().toISOString().split("T")[0],
-      marketOverview: "Briefing-ul zilnic necesită AI activat. Verifică setările Lovable Cloud.",
-      topThemes: topNews.slice(0, 3).map(n => ({
-        theme: n.themes[0] ?? "general",
-        summary: n.title,
-        sentiment: n.sentiment,
-      })),
+      marketOverview: "Briefing-ul zilnic necesită AI activat.",
+      topThemes: topNews.slice(0, 3).map(n => ({ theme: n.themes[0] ?? "general", summary: n.title, sentiment: n.sentiment })),
       keyEvents: [],
-      outlook: "Activează AI pentru un rezumat complet al piețelor.",
+      sectorPerformance: [],
+      commodities: [],
+      techHighlights: [],
+      geopoliticalUpdate: "Activează AI pentru actualizări geopolitice.",
+      outlook: "Activează AI pentru un rezumat complet.",
       generatedAt: new Date().toISOString(),
     };
     return { brief: fallback };
   }
 
   const newsSummary = topNews.map((n, i) =>
-    `${i + 1}. [${n.source}] ${n.title} — Impact: ${n.impact}, Sentiment: ${n.sentiment}, Teme: ${n.themes.join(", ")}`
+    `${i + 1}. [${n.source}] ${n.title} — Impact: ${n.impact}, Sentiment: ${n.sentiment}, Teme: ${n.themes.join(", ")}, Regiuni: ${n.regions.join(", ")}`
   ).join("\n");
 
-  const sys = `Ești un analist financiar senior care scrie briefing-uri zilnice de piață în limba română. Scrii clar, profesionist, condensat. Focus pe ce contează pentru un investitor activ.`;
-  const usr = `Pe baza acestor știri recente, generează un briefing zilnic complet:\n\n${newsSummary}\n\nData: ${new Date().toLocaleDateString("ro-RO", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}`;
+  const sys = `Ești un analist financiar senior la o firmă de investment banking. Scrii briefing-uri zilnice premium în limba română pentru investitori profesioniști. Stilul: precis, cu date concrete (prețuri, procente, valori), fără generalități. Menționezi companii specifice, mișcări de preț concrete, cauze exacte. Focus special pe: Iran/SUA, OPEC, Fed, earnings tech, semiconductori.`;
+  const usr = `Generează un briefing zilnic PREMIUM pe baza acestor ${topNews.length} știri recente:\n\n${newsSummary}\n\nData: ${new Date().toLocaleDateString("ro-RO", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}\n\nIMPORTANT: Fii FOARTE specific cu date, prețuri, procente. Menționează Intel, AMD, Nvidia, Micron, Apple, Microsoft individual. Detalii concrete despre petrol (Brent, WTI), aur, argint. Situația Iran/SUA în detaliu. Performanța pe FIECARE sector major.`;
 
   try {
     const result = await callAI(usr, sys, DAILY_BRIEF_SCHEMA);
@@ -826,6 +824,10 @@ export const getDailyBrief = createServerFn({ method: "GET" }).handler(async ():
       const brief: DailyBrief = {
         date: new Date().toISOString().split("T")[0],
         ...result,
+        sectorPerformance: result.sectorPerformance ?? [],
+        commodities: result.commodities ?? [],
+        techHighlights: result.techHighlights ?? [],
+        geopoliticalUpdate: result.geopoliticalUpdate ?? "",
         generatedAt: new Date().toISOString(),
       };
       dailyBriefCache = { brief, ts: Date.now() };
