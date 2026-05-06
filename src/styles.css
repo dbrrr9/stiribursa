@@ -104,6 +104,48 @@
   --transition-base: 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Dark theme */
+:root.dark {
+  --navy: oklch(0.75 0.06 255);
+  --navy-light: oklch(0.65 0.05 255);
+  --teal: oklch(0.65 0.12 195);
+  --teal-muted: oklch(0.55 0.08 195);
+  --sage: oklch(0.6 0.06 155);
+  --warm-gray: oklch(0.6 0.01 70);
+
+  --background: oklch(0.13 0.02 255);
+  --foreground: oklch(0.92 0.01 70);
+  --card: oklch(0.17 0.02 255);
+  --card-foreground: oklch(0.92 0.01 70);
+  --popover: oklch(0.17 0.02 255);
+  --popover-foreground: oklch(0.92 0.01 70);
+  --primary: oklch(0.65 0.12 195);
+  --primary-foreground: oklch(0.13 0.02 255);
+  --secondary: oklch(0.2 0.02 255);
+  --secondary-foreground: oklch(0.85 0.01 70);
+  --muted: oklch(0.22 0.02 255);
+  --muted-foreground: oklch(0.6 0.02 255);
+  --accent: oklch(0.65 0.12 195);
+  --accent-foreground: oklch(0.13 0.02 255);
+  --destructive: oklch(0.55 0.2 25);
+  --destructive-foreground: oklch(0.95 0.01 70);
+  --border: oklch(0.25 0.02 255);
+  --input: oklch(0.2 0.02 255);
+  --ring: oklch(0.65 0.12 195);
+
+  --impact-high: oklch(0.6 0.2 25);
+  --impact-medium: oklch(0.65 0.15 70);
+  --impact-low: oklch(0.55 0.02 255);
+
+  --sentiment-positive: oklch(0.6 0.15 155);
+  --sentiment-negative: oklch(0.6 0.2 25);
+  --sentiment-mixed: oklch(0.65 0.15 70);
+
+  --shadow-card: 0 1px 3px oklch(0 0 0 / 0.2), 0 0 0 1px oklch(1 0 0 / 0.03);
+  --shadow-card-hover: 0 4px 16px oklch(0 0 0 / 0.3), 0 0 0 1px oklch(1 0 0 / 0.05);
+  --shadow-elevated: 0 8px 32px oklch(0 0 0 / 0.4), 0 0 0 1px oklch(1 0 0 / 0.05);
+}
+
 @layer base {
   * {
     border-color: var(--color-border);
