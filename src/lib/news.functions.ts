@@ -715,20 +715,60 @@ export interface DailyBrief {
 const DAILY_BRIEF_SCHEMA = {
   type: "object",
   properties: {
-    marketOverview: { type: "string", description: "2-3 paragrafe cu un rezumat general al piețelor azi, în română." },
+    marketOverview: { type: "string", description: "3-4 paragrafe cu un rezumat detaliat al piețelor azi, în română. Include mișcări concrete ale S&P 500, Nasdaq, Dow Jones, FTSE, DAX cu procente." },
     topThemes: {
       type: "array",
       items: {
         type: "object",
         properties: {
           theme: { type: "string" },
-          summary: { type: "string" },
+          summary: { type: "string", description: "Rezumat detaliat cu date concrete — prețuri, procente, comparații." },
           sentiment: { type: "string", enum: ["positive", "negative", "mixed", "uncertain"] },
         },
         required: ["theme", "summary", "sentiment"],
       },
-      description: "3-5 teme dominante ale zilei cu rezumat scurt.",
+      description: "5-7 teme dominante ale zilei cu rezumat detaliat.",
     },
+    sectorPerformance: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          sector: { type: "string", description: "ex: Tehnologie, Energie, Financiar, Healthcare, Industrial" },
+          direction: { type: "string", enum: ["up", "down", "flat"] },
+          detail: { type: "string", description: "1-2 propoziții cu companii specifice, procente, cauze." },
+        },
+        required: ["sector", "direction", "detail"],
+      },
+      description: "Performanța pe 5-8 sectoare principale.",
+    },
+    commodities: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "ex: Petrol Brent, Petrol WTI, Aur, Argint, Cupru, Gaz Natural" },
+          direction: { type: "string", enum: ["up", "down", "flat"] },
+          detail: { type: "string", description: "Preț curent estimat, variație %, ce a influențat mișcarea." },
+        },
+        required: ["name", "direction", "detail"],
+      },
+      description: "Mărfuri principale (4-6 intrări).",
+    },
+    techHighlights: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          company: { type: "string", description: "ex: Intel, AMD, Nvidia, Micron, Apple, Microsoft, Tesla, TSMC" },
+          detail: { type: "string", description: "Ce s-a întâmplat, mișcare de preț, context." },
+          sentiment: { type: "string", enum: ["positive", "negative", "mixed", "uncertain"] },
+        },
+        required: ["company", "detail", "sentiment"],
+      },
+      description: "4-8 companii tech/semiconductor relevante.",
+    },
+    geopoliticalUpdate: { type: "string", description: "2-3 paragrafe detaliate: Iran/SUA, Orientul Mijlociu, Ucraina/Rusia, tensiuni China/Taiwan. Impact pe piețe, petrol, dolar." },
     keyEvents: {
       type: "array",
       items: {
@@ -740,11 +780,11 @@ const DAILY_BRIEF_SCHEMA = {
         },
         required: ["time", "event", "impact"],
       },
-      description: "Evenimente cheie de urmărit azi/mâine.",
+      description: "5-10 evenimente cheie de urmărit.",
     },
-    outlook: { type: "string", description: "1-2 paragrafe — perspectivă pe termen scurt pentru investitori." },
+    outlook: { type: "string", description: "2-3 paragrafe — perspectivă pe termen scurt cu scenarii concrete." },
   },
-  required: ["marketOverview", "topThemes", "keyEvents", "outlook"],
+  required: ["marketOverview", "topThemes", "sectorPerformance", "commodities", "techHighlights", "geopoliticalUpdate", "keyEvents", "outlook"],
 };
 
 export const getDailyBrief = createServerFn({ method: "GET" }).handler(async (): Promise<{ brief: DailyBrief | null; error?: string }> => {
