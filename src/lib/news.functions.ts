@@ -358,7 +358,7 @@ function classifyArticle(raw: RawArticle, idx: number): NewsItem | null {
 
   return {
     id,
-    title: raw.title,
+    title: cleanText(raw.title),
     source: raw.source,
     url: raw.link,
     publishedAt,
