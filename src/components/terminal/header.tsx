@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { LiveClock } from "./clock";
 import { TrendingUp } from "lucide-react";
 import { UserMenu } from "./user-menu";
+import { ThemeToggle } from "./theme-toggle";
 
 export function TerminalHeader() {
   return (
@@ -40,6 +41,7 @@ export function TerminalHeader() {
               </span>
             </div>
             <LiveClock />
+            <ThemeToggle />
             <UserMenu />
           </div>
         </div>
