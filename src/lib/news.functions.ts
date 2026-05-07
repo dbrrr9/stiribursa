@@ -23,6 +23,64 @@ const analysisCache = new Map<string, ArticleAnalysis>();
 let dailyBriefCache: { brief: DailyBrief; ts: number } | null = null;
 
 // ============================================================================
+// SSRF PROTECTION — block private/internal IPs
+// ============================================================================
+const BLOCKED_HOSTNAME_PATTERNS = [
+  /^localhost$/i,
+  /^127\.\d+\.\d+\.\d+$/,
+  /^10\.\d+\.\d+\.\d+$/,
+  /^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/,
+  /^192\.168\.\d+\.\d+$/,
+  /^169\.254\.\d+\.\d+$/,       // AWS metadata
+  /^0\.0\.0\.0$/,
+  /^\[::1?\]$/,                  // IPv6 loopback
+  /^metadata\.google\.internal$/i,
+  /^metadata\.internal$/i,
+];
+
+function isUrlSafe(urlStr: string): { safe: boolean; error?: string } {
+  let parsed: URL;
+  try {
+    parsed = new URL(urlStr);
+  } catch {
+    return { safe: false, error: "URL invalid." };
+  }
+  if (parsed.protocol !== "https:") {
+    return { safe: false, error: "Doar URL-uri HTTPS sunt permise." };
+  }
+  const hostname = parsed.hostname;
+  if (BLOCKED_HOSTNAME_PATTERNS.some((p) => p.test(hostname))) {
+    return { safe: false, error: "Acest hostname nu este permis." };
+  }
+  // Block raw IPs (except public-looking ones might still be private, but we blocked ranges above)
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
+    return { safe: false, error: "URL-urile cu IP direct nu sunt permise." };
+  }
+  return { safe: true };
+}
+
+// ============================================================================
+// RATE LIMITER — in-memory, per user, for AI functions
+// ============================================================================
+const rateLimitMap = new Map<string, number[]>();
+const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
+const RATE_LIMIT_MAX = 10; // max 10 AI calls per minute
+
+function checkRateLimit(userId: string): boolean {
+  const now = Date.now();
+  const timestamps = rateLimitMap.get(userId) ?? [];
+  const recent = timestamps.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+  if (recent.length >= RATE_LIMIT_MAX) {
+    rateLimitMap.set(userId, recent);
+    return false;
+  }
+  recent.push(now);
+  rateLimitMap.set(userId, recent);
+  return true;
+}
+
+
+// ============================================================================
 // RSS FEEDS — expanded for better geopolitical + market coverage
 // ============================================================================
 type FeedTier = "primary" | "secondary";
