@@ -689,7 +689,7 @@ export const analyzeCustomNews = createServerFn({ method: "POST" })
                 Accept: "text/html,application/xhtml+xml,*/*",
               },
               signal: AbortSignal.timeout(9000),
-              redirect: "follow",
+              redirect: "manual",
             });
             if (!r.ok) return null;
             return await r.text();
