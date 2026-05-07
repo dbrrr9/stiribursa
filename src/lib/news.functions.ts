@@ -1016,7 +1016,7 @@ function getStaticCatalysts(): CatalystEvent[] {
 // PHASE 3: Advanced Scoring — get score breakdown for an article
 // ============================================================================
 export const getAdvancedScore = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .inputValidator((data: unknown) => z.object({ id: z.string().min(1).max(128) }).parse(data))
   .handler(async ({ data }): Promise<{
     scores: {
       relevance: number;
