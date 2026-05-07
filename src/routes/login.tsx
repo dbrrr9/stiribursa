@@ -88,10 +88,10 @@ function LoginPage() {
             </div>
           </div>
           <h1 className="text-xl font-bold text-foreground text-center mb-1">
-            {mode === "login" ? "Conectare" : "Cont nou"}
+            {mode === "login" ? "Conectare" : mode === "signup" ? "Cont nou" : "Resetare parolă"}
           </h1>
           <p className="text-sm text-muted-foreground text-center mb-6">
-            {mode === "login" ? "Accesează watchlist, alerte și articole salvate" : "Creează-ți contul MarketScope"}
+            {mode === "login" ? "Accesează watchlist, alerte și articole salvate" : mode === "signup" ? "Creează-ți contul MarketScope" : "Introdu emailul pentru a primi un link de resetare"}
           </p>
 
           {/* Google button */}
