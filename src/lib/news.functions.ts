@@ -623,7 +623,7 @@ Generează o analiză completă urmând schema cerută.`;
   });
 
 export const getNewsItem = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .inputValidator((data: unknown) => z.object({ id: z.string().min(1).max(128) }).parse(data))
   .handler(async ({ data }) => {
     const all = newsCache?.items ?? SEED_NEWS;
     const item = all.find((n) => n.id === data.id);
