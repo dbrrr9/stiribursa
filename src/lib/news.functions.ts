@@ -864,7 +864,12 @@ const DAILY_BRIEF_SCHEMA = {
   required: ["marketOverview", "topThemes", "sectorPerformance", "commodities", "techHighlights", "geopoliticalUpdate", "keyEvents", "outlook"],
 };
 
-export const getDailyBrief = createServerFn({ method: "GET" }).handler(async (): Promise<{ brief: DailyBrief | null; error?: string }> => {
+export const getDailyBrief = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<{ brief: DailyBrief | null; error?: string }> => {
+    if (!checkRateLimit(context.userId)) {
+      return { brief: null, error: "Prea multe cereri. Așteaptă un minut." };
+    }
   if (dailyBriefCache && Date.now() - dailyBriefCache.ts < 1000 * 60 * 60) {
     return { brief: dailyBriefCache.brief };
   }
