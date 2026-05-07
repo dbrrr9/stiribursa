@@ -578,8 +578,12 @@ function fallbackAnalysis(data: { title: string; source: string; summary: string
 }
 
 export const analyzeArticle = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => analyzeArticleSchema.parse(data))
-  .handler(async ({ data }): Promise<{ analysis: ArticleAnalysis | null; error?: string }> => {
+  .handler(async ({ data, context }): Promise<{ analysis: ArticleAnalysis | null; error?: string }> => {
+    if (!checkRateLimit(context.userId)) {
+      return { analysis: null, error: "Prea multe cereri. Așteaptă un minut." };
+    }
     const cacheKey = data.id;
     const cached = analysisCache.get(cacheKey);
     if (cached) return { analysis: cached };
