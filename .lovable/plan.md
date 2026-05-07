@@ -1,51 +1,52 @@
 
-## Plan
+# Plan de securizare MarketScope
 
-### 1. Remove Password Gate
-- Delete the `PasswordGate` wrapper from `src/routes/__root.tsx`
-- Optionally remove `src/components/terminal/password-gate.tsx`
+## 1. Ștergere `password-gate.tsx` (parolă hardcoded)
+- Șterge fișierul `src/components/terminal/password-gate.tsx` — conține parola `"dbrnews"` vizibilă în bundle-ul JS.
+- Nu mai e folosit (a fost eliminat din `__root.tsx`), dar fișierul încă există.
 
-### 2. Add Dark Mode / Light Mode Toggle
-- Add dark theme CSS variables in `src/styles.css` under `.dark` class (dark backgrounds, light text, adjusted shadows, etc.)
-- Create a `ThemeToggle` component (Sun/Moon icon button) that toggles `.dark` on `<html>` and persists to `localStorage`
-- Place it in `src/components/terminal/header.tsx` right before the `UserMenu` / "Conectare" button
+## 2. Protecție SSRF pe `analyzeCustomNews`
+- Validare URL: verifică că hostname-ul nu rezolvă la IP-uri private (127.x, 10.x, 172.16-31.x, 192.168.x, 169.254.x — AWS metadata).
+- Allowlist de scheme: doar `https://`.
+- Limită redirects: dezactivează `redirect: "follow"`, gestionează manual cu maxim 2 redirects doar pe domenii publice.
+- Blochează URL-uri cu IP-uri directe (ex: `http://169.254.169.254`).
 
-### 3. Clean Up News Summaries (Remove href/HTML artifacts)
-- In `src/lib/news.functions.ts`, enhance the `decodeEntities` function and the summary cleaning in `classifyArticle` to strip leftover `href=`, anchor tags, and other HTML remnants from titles and summaries
-- Add a dedicated `cleanText()` function that removes URL fragments, `href="..."`, and other markup artifacts
+## 3. Autentificare pe funcțiile AI
+Adaugă `requireSupabaseAuth` middleware pe:
+- `analyzeArticle` — doar userii logați pot cere analiză AI
+- `analyzeCustomNews` — doar userii logați pot trimite URL-uri/texte
+- `getDailyBrief` — doar userii logați văd briefing-ul AI
+- `getCatalystCalendar` — doar userii logați văd calendarul
 
-### 4. Enhance News Aggregation (More Sources, More Quantity, Better Relevance)
-- Add more RSS feed queries in `RSS_FEEDS` array:
-  - Additional Reuters/Bloomberg queries for energy, tech earnings, specific geopolitical topics
-  - More Yahoo Finance and MarketWatch specialized feeds
-  - Add CNBC specific topic feeds (technology, energy)
-- Increase `TARGET_TOTAL` from 80 to 120
-- Increase `MAX_AGE_MS` to 48h for broader coverage
-- Lower `MIN_RELEVANCE` slightly to capture more geopolitical news
-- Expand `THEME_KEYWORDS` for better tech coverage (Intel, AMD, Micron, NVIDIA, Apple, Microsoft, etc.)
-- Expand geopolitica keywords further for Iran/USA specifics
+Funcțiile `getNews` și `getNewsItem` rămân publice (sunt read-only, fără AI).
 
-### 5. Upgrade Daily Brief (Much More Detailed)
-- Expand the `DailyBrief` interface to include new sections:
-  - `sectorPerformance`: array of sector entries with direction/percentage
-  - `commodities`: oil, gold, silver performance data
-  - `techHighlights`: key tech stock moves
-  - `geopoliticalUpdate`: dedicated geopolitical section
-- Update the `DAILY_BRIEF_SCHEMA` to include these new fields
-- Update the AI prompt to request specific data points: exact prices, percentage changes, sector breakdowns for oil, gold, tech stocks (Intel, AMD, Micron, NVIDIA), Iran/USA developments
-- Update `src/routes/brief.tsx` to render the new sections with proper formatting
+## 4. Validare Zod pe `getNewsItem` și `getAdvancedScore`
+Înlocuiește validatoarele no-op cu schema Zod:
+```
+z.object({ id: z.string().min(1).max(128) })
+```
 
-### 6. General Bug Check and Polish
-- Verify all navigation links work (Brief, Calendar, Themes, Saved, Watchlist, Alerts)
-- Ensure dark mode works across all pages (password gate removed, login page, article pages, etc.)
-- Check that the ticker bar and all badges render correctly in both themes
+## 5. Sistem de resetare parolă
+- Adaugă link "Ai uitat parola?" pe pagina de login
+- Mod "forgot" care apelează `supabase.auth.resetPasswordForEmail()` cu `redirectTo: origin + '/reset-password'`
+- Crează ruta `/reset-password` — formular care apelează `supabase.auth.updateUser({ password })` după ce detectează `type=recovery` din URL hash
 
-### Technical Details
+## 6. Rate limiting server-side pe funcțiile AI
+- Implementează un rate limiter simplu in-memory (Map cu IP/userId + timestamp-uri)
+- Limită: max 10 cereri AI / minut per user
+- Returnează 429 cu mesaj clar când limita e depășită
+- Se aplică pe `analyzeArticle`, `analyzeCustomNews`, `getDailyBrief`, `getCatalystCalendar`
 
-**Dark mode CSS**: Will use the existing `@custom-variant dark (&:is(.dark *))` already in styles.css. Add a `:root.dark` block with inverted colors (dark bg `oklch(0.13 0.02 255)`, light text, dark card backgrounds, etc.).
+---
 
-**Theme toggle state**: Stored in `localStorage` key `ms_theme`, checked on mount to avoid flash. Will add a small inline script in the root shell for early theme application.
+### Detalii tehnice
 
-**News cleaning regex**: `/(href|src|class|style|id|rel|target)\s*=\s*["'][^"']*["']/gi` and remaining HTML tag stripping.
+**Fișiere modificate:**
+- `src/lib/news.functions.ts` — adaugă middleware auth, SSRF protection, rate limiter, Zod validators
+- `src/routes/login.tsx` — adaugă mod "forgot password"
+- `src/routes/reset-password.tsx` — pagină nouă pentru setare parolă nouă
 
-**Daily Brief enhancement**: The AI prompt will explicitly request market data with numbers, sector performance, commodity prices, and geopolitical summaries with specific detail about Iran/USA tensions, oil market impact, and tech sector moves.
+**Fișiere șterse:**
+- `src/components/terminal/password-gate.tsx`
+
+**Nota despre "anti-DDoS":** Un rate limiter server-side per user/IP pe funcțiile AI este cea mai bună protecție disponibilă la nivelul aplicației. Protecția DDoS la nivel de rețea (Cloudflare, WAF) este deja inclusă în infrastructura de hosting Lovable Cloud — nu trebuie configurată manual.

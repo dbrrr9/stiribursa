@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { SEED_NEWS } from "./seed-news";
 import type {
   ImpactLevel,
@@ -20,6 +21,64 @@ let newsCache: { items: NewsItem[]; ts: number } | null = null;
 const CACHE_TTL_MS = 1000 * 60 * 8; // 8 min — more frequent refreshes
 const analysisCache = new Map<string, ArticleAnalysis>();
 let dailyBriefCache: { brief: DailyBrief; ts: number } | null = null;
+
+// ============================================================================
+// SSRF PROTECTION — block private/internal IPs
+// ============================================================================
+const BLOCKED_HOSTNAME_PATTERNS = [
+  /^localhost$/i,
+  /^127\.\d+\.\d+\.\d+$/,
+  /^10\.\d+\.\d+\.\d+$/,
+  /^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/,
+  /^192\.168\.\d+\.\d+$/,
+  /^169\.254\.\d+\.\d+$/,       // AWS metadata
+  /^0\.0\.0\.0$/,
+  /^\[::1?\]$/,                  // IPv6 loopback
+  /^metadata\.google\.internal$/i,
+  /^metadata\.internal$/i,
+];
+
+function isUrlSafe(urlStr: string): { safe: boolean; error?: string } {
+  let parsed: URL;
+  try {
+    parsed = new URL(urlStr);
+  } catch {
+    return { safe: false, error: "URL invalid." };
+  }
+  if (parsed.protocol !== "https:") {
+    return { safe: false, error: "Doar URL-uri HTTPS sunt permise." };
+  }
+  const hostname = parsed.hostname;
+  if (BLOCKED_HOSTNAME_PATTERNS.some((p) => p.test(hostname))) {
+    return { safe: false, error: "Acest hostname nu este permis." };
+  }
+  // Block raw IPs (except public-looking ones might still be private, but we blocked ranges above)
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
+    return { safe: false, error: "URL-urile cu IP direct nu sunt permise." };
+  }
+  return { safe: true };
+}
+
+// ============================================================================
+// RATE LIMITER — in-memory, per user, for AI functions
+// ============================================================================
+const rateLimitMap = new Map<string, number[]>();
+const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
+const RATE_LIMIT_MAX = 10; // max 10 AI calls per minute
+
+function checkRateLimit(userId: string): boolean {
+  const now = Date.now();
+  const timestamps = rateLimitMap.get(userId) ?? [];
+  const recent = timestamps.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+  if (recent.length >= RATE_LIMIT_MAX) {
+    rateLimitMap.set(userId, recent);
+    return false;
+  }
+  recent.push(now);
+  rateLimitMap.set(userId, recent);
+  return true;
+}
+
 
 // ============================================================================
 // RSS FEEDS — expanded for better geopolitical + market coverage
@@ -519,8 +578,12 @@ function fallbackAnalysis(data: { title: string; source: string; summary: string
 }
 
 export const analyzeArticle = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => analyzeArticleSchema.parse(data))
-  .handler(async ({ data }): Promise<{ analysis: ArticleAnalysis | null; error?: string }> => {
+  .handler(async ({ data, context }): Promise<{ analysis: ArticleAnalysis | null; error?: string }> => {
+    if (!checkRateLimit(context.userId)) {
+      return { analysis: null, error: "Prea multe cereri. Așteaptă un minut." };
+    }
     const cacheKey = data.id;
     const cached = analysisCache.get(cacheKey);
     if (cached) return { analysis: cached };
@@ -560,7 +623,7 @@ Generează o analiză completă urmând schema cerută.`;
   });
 
 export const getNewsItem = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .inputValidator((data: unknown) => z.object({ id: z.string().min(1).max(128) }).parse(data))
   .handler(async ({ data }) => {
     const all = newsCache?.items ?? SEED_NEWS;
     const item = all.find((n) => n.id === data.id);
@@ -579,18 +642,32 @@ const customAnalyzeSchema = z.object({
 });
 
 export const analyzeCustomNews = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => customAnalyzeSchema.parse(data))
   .handler(
     async ({
       data,
+      context,
     }): Promise<{
       analysis: ArticleAnalysis | null;
       title: string;
       sourceLabel: string;
       error?: string;
     }> => {
+      if (!checkRateLimit(context.userId)) {
+        return { analysis: null, title: "", sourceLabel: "", error: "Prea multe cereri. Așteaptă un minut." };
+      }
+
       const raw = data.input.trim();
       const isUrl = /^https?:\/\/\S+$/i.test(raw);
+
+      // SSRF protection for URL inputs
+      if (isUrl) {
+        const urlCheck = isUrlSafe(raw);
+        if (!urlCheck.safe) {
+          return { analysis: null, title: "", sourceLabel: "", error: urlCheck.error ?? "URL nepermis." };
+        }
+      }
 
       let title = "Știre furnizată de utilizator";
       let bodyText = raw;
@@ -612,7 +689,7 @@ export const analyzeCustomNews = createServerFn({ method: "POST" })
                 Accept: "text/html,application/xhtml+xml,*/*",
               },
               signal: AbortSignal.timeout(9000),
-              redirect: "follow",
+              redirect: "manual",
             });
             if (!r.ok) return null;
             return await r.text();
@@ -787,7 +864,12 @@ const DAILY_BRIEF_SCHEMA = {
   required: ["marketOverview", "topThemes", "sectorPerformance", "commodities", "techHighlights", "geopoliticalUpdate", "keyEvents", "outlook"],
 };
 
-export const getDailyBrief = createServerFn({ method: "GET" }).handler(async (): Promise<{ brief: DailyBrief | null; error?: string }> => {
+export const getDailyBrief = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<{ brief: DailyBrief | null; error?: string }> => {
+    if (!checkRateLimit(context.userId)) {
+      return { brief: null, error: "Prea multe cereri. Așteaptă un minut." };
+    }
   if (dailyBriefCache && Date.now() - dailyBriefCache.ts < 1000 * 60 * 60) {
     return { brief: dailyBriefCache.brief };
   }
@@ -881,7 +963,12 @@ const CATALYST_SCHEMA = {
 
 let catalystCache: { events: CatalystEvent[]; ts: number } | null = null;
 
-export const getCatalystCalendar = createServerFn({ method: "GET" }).handler(async (): Promise<{ events: CatalystEvent[]; error?: string }> => {
+export const getCatalystCalendar = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<{ events: CatalystEvent[]; error?: string }> => {
+    if (!checkRateLimit(context.userId)) {
+      return { events: [], error: "Prea multe cereri. Așteaptă un minut." };
+    }
   if (catalystCache && Date.now() - catalystCache.ts < 1000 * 60 * 60 * 4) {
     return { events: catalystCache.events };
   }
@@ -929,7 +1016,7 @@ function getStaticCatalysts(): CatalystEvent[] {
 // PHASE 3: Advanced Scoring — get score breakdown for an article
 // ============================================================================
 export const getAdvancedScore = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .inputValidator((data: unknown) => z.object({ id: z.string().min(1).max(128) }).parse(data))
   .handler(async ({ data }): Promise<{
     scores: {
       relevance: number;

@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as WatchlistRouteImport } from './routes/watchlist'
 import { Route as ThemesRouteImport } from './routes/themes'
 import { Route as SavedRouteImport } from './routes/saved'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as CalendarRouteImport } from './routes/calendar'
 import { Route as BriefRouteImport } from './routes/brief'
@@ -33,6 +34,11 @@ const ThemesRoute = ThemesRouteImport.update({
 const SavedRoute = SavedRouteImport.update({
   id: '/saved',
   path: '/saved',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -78,6 +84,7 @@ export interface FileRoutesByFullPath {
   '/brief': typeof BriefRoute
   '/calendar': typeof CalendarRoute
   '/login': typeof LoginRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/saved': typeof SavedRoute
   '/themes': typeof ThemesRoute
   '/watchlist': typeof WatchlistRoute
@@ -90,6 +97,7 @@ export interface FileRoutesByTo {
   '/brief': typeof BriefRoute
   '/calendar': typeof CalendarRoute
   '/login': typeof LoginRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/saved': typeof SavedRoute
   '/themes': typeof ThemesRoute
   '/watchlist': typeof WatchlistRoute
@@ -103,6 +111,7 @@ export interface FileRoutesById {
   '/brief': typeof BriefRoute
   '/calendar': typeof CalendarRoute
   '/login': typeof LoginRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/saved': typeof SavedRoute
   '/themes': typeof ThemesRoute
   '/watchlist': typeof WatchlistRoute
@@ -117,6 +126,7 @@ export interface FileRouteTypes {
     | '/brief'
     | '/calendar'
     | '/login'
+    | '/reset-password'
     | '/saved'
     | '/themes'
     | '/watchlist'
@@ -129,6 +139,7 @@ export interface FileRouteTypes {
     | '/brief'
     | '/calendar'
     | '/login'
+    | '/reset-password'
     | '/saved'
     | '/themes'
     | '/watchlist'
@@ -141,6 +152,7 @@ export interface FileRouteTypes {
     | '/brief'
     | '/calendar'
     | '/login'
+    | '/reset-password'
     | '/saved'
     | '/themes'
     | '/watchlist'
@@ -154,6 +166,7 @@ export interface RootRouteChildren {
   BriefRoute: typeof BriefRoute
   CalendarRoute: typeof CalendarRoute
   LoginRoute: typeof LoginRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   SavedRoute: typeof SavedRoute
   ThemesRoute: typeof ThemesRoute
   WatchlistRoute: typeof WatchlistRoute
@@ -181,6 +194,13 @@ declare module '@tanstack/react-router' {
       path: '/saved'
       fullPath: '/saved'
       preLoaderRoute: typeof SavedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -242,6 +262,7 @@ const rootRouteChildren: RootRouteChildren = {
   BriefRoute: BriefRoute,
   CalendarRoute: CalendarRoute,
   LoginRoute: LoginRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   SavedRoute: SavedRoute,
   ThemesRoute: ThemesRoute,
   WatchlistRoute: WatchlistRoute,
