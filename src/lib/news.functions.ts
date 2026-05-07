@@ -963,7 +963,12 @@ const CATALYST_SCHEMA = {
 
 let catalystCache: { events: CatalystEvent[]; ts: number } | null = null;
 
-export const getCatalystCalendar = createServerFn({ method: "GET" }).handler(async (): Promise<{ events: CatalystEvent[]; error?: string }> => {
+export const getCatalystCalendar = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<{ events: CatalystEvent[]; error?: string }> => {
+    if (!checkRateLimit(context.userId)) {
+      return { events: [], error: "Prea multe cereri. Așteaptă un minut." };
+    }
   if (catalystCache && Date.now() - catalystCache.ts < 1000 * 60 * 60 * 4) {
     return { events: catalystCache.events };
   }
