@@ -642,18 +642,32 @@ const customAnalyzeSchema = z.object({
 });
 
 export const analyzeCustomNews = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => customAnalyzeSchema.parse(data))
   .handler(
     async ({
       data,
+      context,
     }): Promise<{
       analysis: ArticleAnalysis | null;
       title: string;
       sourceLabel: string;
       error?: string;
     }> => {
+      if (!checkRateLimit(context.userId)) {
+        return { analysis: null, title: "", sourceLabel: "", error: "Prea multe cereri. Așteaptă un minut." };
+      }
+
       const raw = data.input.trim();
       const isUrl = /^https?:\/\/\S+$/i.test(raw);
+
+      // SSRF protection for URL inputs
+      if (isUrl) {
+        const urlCheck = isUrlSafe(raw);
+        if (!urlCheck.safe) {
+          return { analysis: null, title: "", sourceLabel: "", error: urlCheck.error ?? "URL nepermis." };
+        }
+      }
 
       let title = "Știre furnizată de utilizator";
       let bodyText = raw;
