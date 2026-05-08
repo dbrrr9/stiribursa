@@ -578,10 +578,10 @@ function fallbackAnalysis(data: { title: string; source: string; summary: string
 }
 
 export const analyzeArticle = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => analyzeArticleSchema.parse(data))
-  .handler(async ({ data, context }): Promise<{ analysis: ArticleAnalysis | null; error?: string }> => {
-    if (!checkRateLimit(context.userId)) {
+  .handler(async ({ data }): Promise<{ analysis: ArticleAnalysis | null; error?: string }> => {
+    const rlKey = `analyze-${data.id}`;
+    if (!checkRateLimit(rlKey)) {
       return { analysis: null, error: "Prea multe cereri. Așteaptă un minut." };
     }
     const cacheKey = data.id;
@@ -625,6 +625,14 @@ Generează o analiză completă urmând schema cerută.`;
 export const getNewsItem = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => z.object({ id: z.string().min(1).max(128) }).parse(data))
   .handler(async ({ data }) => {
+    // If cache is empty, fetch news first to populate it
+    if (!newsCache) {
+      try {
+        await fetchLatestNews();
+      } catch (e) {
+        console.error("getNewsItem: failed to populate cache", e);
+      }
+    }
     const all = newsCache?.items ?? SEED_NEWS;
     const item = all.find((n) => n.id === data.id);
     if (!item) {
@@ -642,19 +650,18 @@ const customAnalyzeSchema = z.object({
 });
 
 export const analyzeCustomNews = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => customAnalyzeSchema.parse(data))
   .handler(
     async ({
       data,
-      context,
     }): Promise<{
       analysis: ArticleAnalysis | null;
       title: string;
       sourceLabel: string;
       error?: string;
     }> => {
-      if (!checkRateLimit(context.userId)) {
+      const rlKey = `custom-${Date.now()}`;
+      if (!checkRateLimit(rlKey)) {
         return { analysis: null, title: "", sourceLabel: "", error: "Prea multe cereri. Așteaptă un minut." };
       }
 
@@ -864,10 +871,10 @@ const DAILY_BRIEF_SCHEMA = {
   required: ["marketOverview", "topThemes", "sectorPerformance", "commodities", "techHighlights", "geopoliticalUpdate", "keyEvents", "outlook"],
 };
 
-export const getDailyBrief = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<{ brief: DailyBrief | null; error?: string }> => {
-    if (!checkRateLimit(context.userId)) {
+export const getDailyBrief = createServerFn({ method: "POST" })
+  .handler(async (): Promise<{ brief: DailyBrief | null; error?: string }> => {
+    const rlKey = `brief-${Date.now()}`;
+    if (!checkRateLimit(rlKey)) {
       return { brief: null, error: "Prea multe cereri. Așteaptă un minut." };
     }
   if (dailyBriefCache && Date.now() - dailyBriefCache.ts < 1000 * 60 * 60) {
@@ -963,10 +970,10 @@ const CATALYST_SCHEMA = {
 
 let catalystCache: { events: CatalystEvent[]; ts: number } | null = null;
 
-export const getCatalystCalendar = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<{ events: CatalystEvent[]; error?: string }> => {
-    if (!checkRateLimit(context.userId)) {
+export const getCatalystCalendar = createServerFn({ method: "POST" })
+  .handler(async (): Promise<{ events: CatalystEvent[]; error?: string }> => {
+    const rlKey = `catalyst-${Date.now()}`;
+    if (!checkRateLimit(rlKey)) {
       return { events: [], error: "Prea multe cereri. Așteaptă un minut." };
     }
   if (catalystCache && Date.now() - catalystCache.ts < 1000 * 60 * 60 * 4) {
