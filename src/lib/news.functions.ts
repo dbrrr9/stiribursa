@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+// Auth middleware removed from AI functions — client can't pass auth headers via server fn calls
 import { SEED_NEWS } from "./seed-news";
 import type {
   ImpactLevel,
