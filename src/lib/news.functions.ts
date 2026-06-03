@@ -122,8 +122,8 @@ const RSS_FEEDS: { source: NewsSource; url: string; tier: FeedTier }[] = [
   { source: "MarketWatch", url: "https://news.google.com/rss/search?q=site:marketwatch.com+(markets+OR+stocks+OR+oil+OR+gold+OR+tech+OR+fed)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
 ];
 
-const TARGET_TOTAL = 120;
-const MAX_AGE_MS = 1000 * 60 * 60 * 48; // 48h
+const TARGET_TOTAL = 150;
+const MAX_AGE_MS = 1000 * 60 * 60 * 36; // 36h — prioritise fresh news
 const MIN_RELEVANCE = 35;
 
 // ============================================================================
