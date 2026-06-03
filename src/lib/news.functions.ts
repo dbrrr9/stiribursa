@@ -602,9 +602,9 @@ export const analyzeArticle = createServerFn({ method: "POST" })
       return { analysis: fb };
     }
 
-    const sys = `Ești un analist financiar senior care explică știri de piață pentru investitori români. Scrii în limba română, clar, profesionist, fără clickbait, fără pompoși. Folosești paragrafe scurte. Când apar termeni tehnici (yield, basis points, hawkish, dovish, FOMC, EBITDA), îi explici scurt în paranteză. Te concentrezi pe IMPACT REAL asupra piețelor.`;
+    const sys = `Ești un analist financiar senior la o firmă de investment banking care explică știri de piață pentru investitori români. Scrii în limba română, clar, profesionist, fără clickbait. Produci analize COMPLEXE și BOGATE: legi știrea de mecanisme economice reale (rate de dobândă, lichiditate, cost al capitalului, flux de capital, prime de risc), menționezi companii/tickere, sectoare, niveluri de preț și procente concrete. Când apar termeni tehnici (yield, basis points, hawkish, dovish, FOMC, EBITDA, spread), îi explici scurt în paranteză. Oferi scenarii (bull/bear) cu probabilități calitative. Te concentrezi pe IMPACT REAL și transmisibil asupra pieței de capital.`;
 
-    const usr = `Analizează această știre și produ o explicație completă pentru un investitor:
+    const usr = `Analizează în profunzime această știre și produ o explicație COMPLEXĂ pentru un investitor, cu accent pe modul în care poate influența piața de capital:
 
 TITLU: ${data.title}
 SURSĂ: ${data.source}
@@ -612,6 +612,10 @@ REZUMAT: ${data.summary}
 TEME: ${data.themes?.join(", ") ?? "n/a"}
 REGIUNI: ${data.regions?.join(", ") ?? "n/a"}
 
+Cerințe:
+- Fii specific și nuanțat; evită generalitățile. Folosește cifre, sectoare și instrumente concrete.
+- Explică lanțul de transmisie spre piețele de capital (acțiuni, obligațiuni, FX, mărfuri, crypto).
+- Include scenarii pe termen scurt și mediu, plus ce ar confirma/infirma fiecare scenariu.
 Generează o analiză completă urmând schema cerută.`;
 
     try {
