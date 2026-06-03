@@ -775,8 +775,8 @@ export const analyzeCustomNews = createServerFn({ method: "POST" })
         };
       }
 
-      const sys = `Ești un analist financiar senior care explică știri de piață pentru investitori români. Scrii în limba română, clar, profesionist.`;
-      const usr = `Analizează următoarea știre:\n\nSURSĂ: ${sourceLabel}\nTITLU: ${title}\n\nCONȚINUT:\n${bodyText}\n\nGenerează o analiză completă urmând schema cerută.`;
+      const sys = `Ești un analist financiar senior la o firmă de investment banking care explică știri de piață pentru investitori români. Scrii în limba română, clar și profesionist. Produci analize COMPLEXE: legi știrea de mecanisme economice, menționezi sectoare/companii, niveluri și procente concrete, oferi scenarii pe termen scurt și mediu, și explici lanțul de transmisie spre piața de capital. Explici termenii tehnici în paranteză.`;
+      const usr = `Analizează în profunzime următoarea știre, cu accent pe impactul complex asupra pieței de capital:\n\nSURSĂ: ${sourceLabel}\nTITLU: ${title}\n\nCONȚINUT:\n${bodyText}\n\nFii specific (cifre, sectoare, instrumente), explică lanțul de transmisie spre acțiuni/obligațiuni/FX/mărfuri și include scenarii. Generează o analiză completă urmând schema cerută.`;
 
       try {
         const result = (await callAI(usr, sys, ANALYSIS_SCHEMA)) as ArticleAnalysis | null;
