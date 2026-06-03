@@ -484,12 +484,17 @@ export const fetchLatestNews = createServerFn({ method: "GET" }).handler(async (
       .filter((n) => now - new Date(n.publishedAt).getTime() <= MAX_AGE_MS)
       .filter((n) => n.relevanceScore >= MIN_RELEVANCE);
 
-    if (classified.length >= 5) {
+    if (classified.length >= 1) {
       classified.sort(
         (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
       );
 
-      const items = classified.slice(0, TARGET_TOTAL);
+      // If we got very few live items, top up with seed so the feed never looks empty
+      let items = classified.slice(0, TARGET_TOTAL);
+      if (items.length < 12) {
+        const seenIds = new Set(items.map((n) => n.id));
+        items = [...items, ...SEED_NEWS.filter((n) => !seenIds.has(n.id))].slice(0, TARGET_TOTAL);
+      }
       newsCache = { items, ts: Date.now() };
       return { items, cached: false, source: "live" as const };
     }
@@ -497,7 +502,8 @@ export const fetchLatestNews = createServerFn({ method: "GET" }).handler(async (
     console.error("RSS aggregation failed:", e);
   }
 
-  newsCache = { items: SEED_NEWS, ts: Date.now() };
+  // No live news at all — serve seed but cache briefly so the next request retries the feeds
+  newsCache = { items: SEED_NEWS, ts: Date.now() - (CACHE_TTL_MS - 1000 * 60) };
   return { items: SEED_NEWS, cached: false, source: "seed" as const };
 });
 
