@@ -18,7 +18,7 @@ const AI_MODEL = "google/gemini-3-flash-preview";
 
 // In-memory cache (per worker instance)
 let newsCache: { items: NewsItem[]; ts: number } | null = null;
-const CACHE_TTL_MS = 1000 * 60 * 8; // 8 min — more frequent refreshes
+const CACHE_TTL_MS = 1000 * 60 * 5; // 5 min — frequent refreshes for fresher news
 const analysisCache = new Map<string, ArticleAnalysis>();
 let dailyBriefCache: { brief: DailyBrief; ts: number } | null = null;
 
