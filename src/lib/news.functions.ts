@@ -18,7 +18,7 @@ const AI_MODEL = "google/gemini-3-flash-preview";
 
 // In-memory cache (per worker instance)
 let newsCache: { items: NewsItem[]; ts: number } | null = null;
-const CACHE_TTL_MS = 1000 * 60 * 8; // 8 min — more frequent refreshes
+const CACHE_TTL_MS = 1000 * 60 * 5; // 5 min — frequent refreshes for fresher news
 const analysisCache = new Map<string, ArticleAnalysis>();
 let dailyBriefCache: { brief: DailyBrief; ts: number } | null = null;
 
@@ -86,21 +86,23 @@ function checkRateLimit(userId: string): boolean {
 type FeedTier = "primary" | "secondary";
 const RSS_FEEDS: { source: NewsSource; url: string; tier: FeedTier }[] = [
   // === REUTERS — broad coverage ===
-  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+(markets+OR+stocks+OR+economy+OR+fed+OR+earnings)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
-  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+(iran+OR+sanctions+OR+war+OR+geopolitics+OR+tariff+OR+trade+war+OR+middle+east)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
-  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+(oil+OR+gold+OR+treasury+OR+inflation+OR+recession+OR+china+OR+russia)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
-  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+(nuclear+OR+deal+OR+sanctions+OR+drone+OR+attack+OR+military+OR+defense)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
-  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+(tech+OR+AI+OR+semiconductor+OR+Intel+OR+AMD+OR+Nvidia+OR+Micron+OR+Apple+OR+Microsoft)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
-  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+(OPEC+OR+energy+OR+natural+gas+OR+crude+OR+brent+OR+petroleum)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
-  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+(Trump+OR+Biden+OR+congress+OR+tariff+OR+trade+OR+policy)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
+  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+when:2d+(markets+OR+stocks+OR+economy+OR+fed+OR+earnings)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
+  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+when:2d+(iran+OR+sanctions+OR+war+OR+geopolitics+OR+tariff+OR+trade+war+OR+middle+east)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
+  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+when:2d+(oil+OR+gold+OR+treasury+OR+inflation+OR+recession+OR+china+OR+russia)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
+  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+when:2d+(nuclear+OR+deal+OR+sanctions+OR+drone+OR+attack+OR+military+OR+defense)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
+  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+when:2d+(tech+OR+AI+OR+semiconductor+OR+Intel+OR+AMD+OR+Nvidia+OR+Micron+OR+Apple+OR+Microsoft)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
+  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+when:2d+(breaking+OR+wall+street+OR+dow+OR+nasdaq+OR+s%26p+OR+bonds+OR+yields)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
+  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+when:2d+(OPEC+OR+energy+OR+natural+gas+OR+crude+OR+brent+OR+petroleum)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
+  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+when:2d+(Trump+OR+Biden+OR+congress+OR+tariff+OR+trade+OR+policy)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
 
   // === BLOOMBERG — broad coverage ===
-  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+(markets+OR+stocks+OR+economy+OR+fed+OR+earnings+OR+oil+OR+gold)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
-  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+(iran+OR+sanctions+OR+war+OR+geopolitics+OR+tariff+OR+trade+OR+defense)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
-  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+(crypto+OR+bitcoin+OR+inflation+OR+recession+OR+china+OR+treasury)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
-  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+(tech+OR+semiconductor+OR+Intel+OR+AMD+OR+Nvidia+OR+Micron+OR+AI+OR+Apple)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
-  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+(OPEC+OR+energy+OR+oil+OR+gold+OR+commodities+OR+copper+OR+silver)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
-  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+(Trump+OR+Biden+OR+election+OR+congress+OR+policy+OR+regulation)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
+  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+when:2d+(markets+OR+stocks+OR+economy+OR+fed+OR+earnings+OR+oil+OR+gold)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
+  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+when:2d+(iran+OR+sanctions+OR+war+OR+geopolitics+OR+tariff+OR+trade+OR+defense)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
+  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+when:2d+(tech+OR+semiconductor+OR+Intel+OR+AMD+OR+Nvidia+OR+Micron+OR+AI+OR+Apple)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
+  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+when:2d+(breaking+OR+wall+street+OR+dow+OR+nasdaq+OR+s%26p+OR+bonds+OR+yields+OR+dollar)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
+  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+when:2d+(crypto+OR+bitcoin+OR+inflation+OR+recession+OR+china+OR+treasury)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
+  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+when:2d+(OPEC+OR+energy+OR+oil+OR+gold+OR+commodities+OR+copper+OR+silver)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
+  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+when:2d+(Trump+OR+Biden+OR+election+OR+congress+OR+policy+OR+regulation)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
 
   // === Yahoo Finance ===
   { source: "Yahoo Finance", url: "https://finance.yahoo.com/news/rssindex", tier: "primary" },
@@ -120,8 +122,8 @@ const RSS_FEEDS: { source: NewsSource; url: string; tier: FeedTier }[] = [
   { source: "MarketWatch", url: "https://news.google.com/rss/search?q=site:marketwatch.com+(markets+OR+stocks+OR+oil+OR+gold+OR+tech+OR+fed)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
 ];
 
-const TARGET_TOTAL = 120;
-const MAX_AGE_MS = 1000 * 60 * 60 * 48; // 48h
+const TARGET_TOTAL = 150;
+const MAX_AGE_MS = 1000 * 60 * 60 * 36; // 36h — prioritise fresh news
 const MIN_RELEVANCE = 35;
 
 // ============================================================================
@@ -401,7 +403,7 @@ function classifyArticle(raw: RawArticle, idx: number): NewsItem | null {
   const themeBonus = Math.min(themes.length * 5, 20);
   const triggerBonus = Math.min(highHits * 4, 15);
   const geoBonus = isGeopolitical ? 10 : 0;
-  const sourceBonus = (raw.source === "Reuters" || raw.source === "Bloomberg") ? 5 : 0;
+  const sourceBonus = (raw.source === "Reuters" || raw.source === "Bloomberg") ? 10 : 0;
   const relevanceScore = Math.min(100, impactScore + themeBonus + triggerBonus + geoBonus + sourceBonus);
 
   // Published date
@@ -482,12 +484,17 @@ export const fetchLatestNews = createServerFn({ method: "GET" }).handler(async (
       .filter((n) => now - new Date(n.publishedAt).getTime() <= MAX_AGE_MS)
       .filter((n) => n.relevanceScore >= MIN_RELEVANCE);
 
-    if (classified.length >= 5) {
+    if (classified.length >= 1) {
       classified.sort(
         (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
       );
 
-      const items = classified.slice(0, TARGET_TOTAL);
+      // If we got very few live items, top up with seed so the feed never looks empty
+      let items = classified.slice(0, TARGET_TOTAL);
+      if (items.length < 12) {
+        const seenIds = new Set(items.map((n) => n.id));
+        items = [...items, ...SEED_NEWS.filter((n) => !seenIds.has(n.id))].slice(0, TARGET_TOTAL);
+      }
       newsCache = { items, ts: Date.now() };
       return { items, cached: false, source: "live" as const };
     }
@@ -495,7 +502,8 @@ export const fetchLatestNews = createServerFn({ method: "GET" }).handler(async (
     console.error("RSS aggregation failed:", e);
   }
 
-  newsCache = { items: SEED_NEWS, ts: Date.now() };
+  // No live news at all — serve seed but cache briefly so the next request retries the feeds
+  newsCache = { items: SEED_NEWS, ts: Date.now() - (CACHE_TTL_MS - 1000 * 60) };
   return { items: SEED_NEWS, cached: false, source: "seed" as const };
 });
 
@@ -507,33 +515,33 @@ const ANALYSIS_SCHEMA = {
   properties: {
     summarySimple: {
       type: "string",
-      description: "3-4 paragrafe scurte în română simplă, fără jargon. Explică știrea ca pentru un nou investitor.",
+      description: "4-6 paragrafe în română clară. Explică detaliat CE s-a întâmplat, contextul, actorii implicați și cifrele concrete (prețuri, procente, valori). Începe simplu pentru un investitor începător, apoi adaugă profunzime. Fără jargon nefiltrat — explică termenii tehnici în paranteză.",
     },
     whyItMatters: {
       type: "string",
-      description: "1-2 paragrafe: ce s-a schimbat și de ce urmăresc investitorii subiectul.",
+      description: "2-3 paragrafe: de ce este important pentru piața de capital, ce mecanisme economice se activează (lichiditate, rate, cost al capitalului, flux de capital), și care sunt legăturile cu macro-ul actual.",
     },
     shortTermImpact: {
       type: "string",
-      description: "Impact pe termen scurt (zile-săptămâni).",
+      description: "Impact pe termen scurt (zile-săptămâni) cu scenarii concrete: cum pot reacționa indicii, yield-urile, dolarul, mărfurile, sectoarele și acțiunile specifice. Include direcție probabilă și amploarea estimată.",
     },
     mediumTermImpact: {
       type: "string",
-      description: "Impact pe termen mediu (1-6 luni).",
+      description: "Impact pe termen mediu (1-6 luni): traiectorii posibile, riscuri de contagiune, ce s-ar schimba în teza de investiție, și ce factori ar confirma/infirma scenariul.",
     },
     affectedMarkets: {
       type: "string",
-      description: "Paragraf clar despre ce piețe sunt afectate concret (acțiuni, obligațiuni, FX, mărfuri, crypto, regiuni, sectoare).",
+      description: "2-3 paragrafe detaliate despre piețele afectate concret: acțiuni și sectoare (cu tickere/companii), obligațiuni și yield-uri, FX (perechi concrete), mărfuri (Brent/WTI, aur etc.), crypto, regiuni. Explică mecanismul de transmisie pentru fiecare.",
     },
     watchPoints: {
       type: "array",
       items: { type: "string" },
-      description: "3-5 puncte concrete pe care un investitor ar trebui să le urmărească.",
+      description: "4-6 puncte concrete și acționabile pe care un investitor ar trebui să le urmărească (niveluri de preț, date economice, declarații oficiali, termene-cheie).",
     },
     bottomLine: {
       type: "array",
       items: { type: "string" },
-      description: "3-5 bullets foarte scurte — esențialul.",
+      description: "4-6 bullets foarte scurte — esențialul și concluzia practică pentru un investitor.",
     },
   },
   required: [
@@ -594,9 +602,9 @@ export const analyzeArticle = createServerFn({ method: "POST" })
       return { analysis: fb };
     }
 
-    const sys = `Ești un analist financiar senior care explică știri de piață pentru investitori români. Scrii în limba română, clar, profesionist, fără clickbait, fără pompoși. Folosești paragrafe scurte. Când apar termeni tehnici (yield, basis points, hawkish, dovish, FOMC, EBITDA), îi explici scurt în paranteză. Te concentrezi pe IMPACT REAL asupra piețelor.`;
+    const sys = `Ești un analist financiar senior la o firmă de investment banking care explică știri de piață pentru investitori români. Scrii în limba română, clar, profesionist, fără clickbait. Produci analize COMPLEXE și BOGATE: legi știrea de mecanisme economice reale (rate de dobândă, lichiditate, cost al capitalului, flux de capital, prime de risc), menționezi companii/tickere, sectoare, niveluri de preț și procente concrete. Când apar termeni tehnici (yield, basis points, hawkish, dovish, FOMC, EBITDA, spread), îi explici scurt în paranteză. Oferi scenarii (bull/bear) cu probabilități calitative. Te concentrezi pe IMPACT REAL și transmisibil asupra pieței de capital.`;
 
-    const usr = `Analizează această știre și produ o explicație completă pentru un investitor:
+    const usr = `Analizează în profunzime această știre și produ o explicație COMPLEXĂ pentru un investitor, cu accent pe modul în care poate influența piața de capital:
 
 TITLU: ${data.title}
 SURSĂ: ${data.source}
@@ -604,6 +612,10 @@ REZUMAT: ${data.summary}
 TEME: ${data.themes?.join(", ") ?? "n/a"}
 REGIUNI: ${data.regions?.join(", ") ?? "n/a"}
 
+Cerințe:
+- Fii specific și nuanțat; evită generalitățile. Folosește cifre, sectoare și instrumente concrete.
+- Explică lanțul de transmisie spre piețele de capital (acțiuni, obligațiuni, FX, mărfuri, crypto).
+- Include scenarii pe termen scurt și mediu, plus ce ar confirma/infirma fiecare scenariu.
 Generează o analiză completă urmând schema cerută.`;
 
     try {
@@ -763,8 +775,8 @@ export const analyzeCustomNews = createServerFn({ method: "POST" })
         };
       }
 
-      const sys = `Ești un analist financiar senior care explică știri de piață pentru investitori români. Scrii în limba română, clar, profesionist.`;
-      const usr = `Analizează următoarea știre:\n\nSURSĂ: ${sourceLabel}\nTITLU: ${title}\n\nCONȚINUT:\n${bodyText}\n\nGenerează o analiză completă urmând schema cerută.`;
+      const sys = `Ești un analist financiar senior la o firmă de investment banking care explică știri de piață pentru investitori români. Scrii în limba română, clar și profesionist. Produci analize COMPLEXE: legi știrea de mecanisme economice, menționezi sectoare/companii, niveluri și procente concrete, oferi scenarii pe termen scurt și mediu, și explici lanțul de transmisie spre piața de capital. Explici termenii tehnici în paranteză.`;
+      const usr = `Analizează în profunzime următoarea știre, cu accent pe impactul complex asupra pieței de capital:\n\nSURSĂ: ${sourceLabel}\nTITLU: ${title}\n\nCONȚINUT:\n${bodyText}\n\nFii specific (cifre, sectoare, instrumente), explică lanțul de transmisie spre acțiuni/obligațiuni/FX/mărfuri și include scenarii. Generează o analiză completă urmând schema cerută.`;
 
       try {
         const result = (await callAI(usr, sys, ANALYSIS_SCHEMA)) as ArticleAnalysis | null;
