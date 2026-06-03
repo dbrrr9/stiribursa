@@ -515,33 +515,33 @@ const ANALYSIS_SCHEMA = {
   properties: {
     summarySimple: {
       type: "string",
-      description: "3-4 paragrafe scurte în română simplă, fără jargon. Explică știrea ca pentru un nou investitor.",
+      description: "4-6 paragrafe în română clară. Explică detaliat CE s-a întâmplat, contextul, actorii implicați și cifrele concrete (prețuri, procente, valori). Începe simplu pentru un investitor începător, apoi adaugă profunzime. Fără jargon nefiltrat — explică termenii tehnici în paranteză.",
     },
     whyItMatters: {
       type: "string",
-      description: "1-2 paragrafe: ce s-a schimbat și de ce urmăresc investitorii subiectul.",
+      description: "2-3 paragrafe: de ce este important pentru piața de capital, ce mecanisme economice se activează (lichiditate, rate, cost al capitalului, flux de capital), și care sunt legăturile cu macro-ul actual.",
     },
     shortTermImpact: {
       type: "string",
-      description: "Impact pe termen scurt (zile-săptămâni).",
+      description: "Impact pe termen scurt (zile-săptămâni) cu scenarii concrete: cum pot reacționa indicii, yield-urile, dolarul, mărfurile, sectoarele și acțiunile specifice. Include direcție probabilă și amploarea estimată.",
     },
     mediumTermImpact: {
       type: "string",
-      description: "Impact pe termen mediu (1-6 luni).",
+      description: "Impact pe termen mediu (1-6 luni): traiectorii posibile, riscuri de contagiune, ce s-ar schimba în teza de investiție, și ce factori ar confirma/infirma scenariul.",
     },
     affectedMarkets: {
       type: "string",
-      description: "Paragraf clar despre ce piețe sunt afectate concret (acțiuni, obligațiuni, FX, mărfuri, crypto, regiuni, sectoare).",
+      description: "2-3 paragrafe detaliate despre piețele afectate concret: acțiuni și sectoare (cu tickere/companii), obligațiuni și yield-uri, FX (perechi concrete), mărfuri (Brent/WTI, aur etc.), crypto, regiuni. Explică mecanismul de transmisie pentru fiecare.",
     },
     watchPoints: {
       type: "array",
       items: { type: "string" },
-      description: "3-5 puncte concrete pe care un investitor ar trebui să le urmărească.",
+      description: "4-6 puncte concrete și acționabile pe care un investitor ar trebui să le urmărească (niveluri de preț, date economice, declarații oficiali, termene-cheie).",
     },
     bottomLine: {
       type: "array",
       items: { type: "string" },
-      description: "3-5 bullets foarte scurte — esențialul.",
+      description: "4-6 bullets foarte scurte — esențialul și concluzia practică pentru un investitor.",
     },
   },
   required: [
