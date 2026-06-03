@@ -32,18 +32,32 @@ export function LiveClock() {
   );
 }
 
-export function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
+function safeDate(iso?: string | null): Date | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  const t = d.getTime();
+  // Reject invalid dates and bogus epoch/1970 values (e.g. new Date(null) -> 0)
+  if (isNaN(t) || t < 946684800000) return null; // before 2000-01-01 = invalid for live news
+  return d;
+}
+
+export function timeAgo(iso?: string | null): string {
+  const d = safeDate(iso);
+  if (!d) return "recent";
+  let diff = Date.now() - d.getTime();
+  if (diff < 0) diff = 0; // future timestamps -> treat as now
   const m = Math.floor(diff / 60000);
   if (m < 1) return "acum";
   if (m < 60) return `${m}m`;
   const h = Math.floor(m / 60);
   if (h < 24) return `${h}h ${m % 60}m`;
-  const d = Math.floor(h / 24);
-  return `${d}z`;
+  const d2 = Math.floor(h / 24);
+  if (d2 < 30) return `${d2}z`;
+  return d.toLocaleDateString("ro-RO", { day: "2-digit", month: "short" });
 }
 
-export function formatTimestamp(iso: string): string {
-  const d = new Date(iso);
+export function formatTimestamp(iso?: string | null): string {
+  const d = safeDate(iso);
+  if (!d) return "Dată indisponibilă";
   return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())} UTC · ${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}`;
 }
