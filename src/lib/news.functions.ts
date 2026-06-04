@@ -184,6 +184,27 @@ interface RawArticle {
   source: NewsSource;
 }
 
+function parsePublishedTime(value?: string | null): number | null {
+  if (!value) return null;
+  const normalized = value.trim().replace(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})$/, "$1T$2Z");
+  const t = new Date(normalized).getTime();
+  if (Number.isNaN(t) || t < 946684800000) return null;
+  return t;
+}
+
+async function mapConcurrent<T, R>(items: T[], limit: number, mapper: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex++;
+      results[index] = await mapper(items[index]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 function decodeEntities(s: string): string {
   return s
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
@@ -223,7 +244,7 @@ function extractTag(block: string, tag: string): string {
   return m ? decodeEntities(m[1]) : "";
 }
 
-function parseRSS(xml: string, source: NewsSource): RawArticle[] {
+function parseRSS(xml: string, source: NewsSource, sourceOverride?: NewsSource): RawArticle[] {
   const items: RawArticle[] = [];
   const itemBlocks = xml.match(/<item[\s>][\s\S]*?<\/item>/gi) ?? [];
   const entryBlocks = xml.match(/<entry[\s>][\s\S]*?<\/entry>/gi) ?? [];
@@ -239,8 +260,10 @@ function parseRSS(xml: string, source: NewsSource): RawArticle[] {
       extractTag(block, "description") ||
       extractTag(block, "content:encoded") ||
       extractTag(block, "summary");
+    const author = extractTag(block, "author") || extractTag(block, "dc:creator");
+    const effectiveSource = sourceOverride && author.toLowerCase().includes(sourceOverride.toLowerCase()) ? sourceOverride : source;
     title = stripSuffix(title);
-    if (title) items.push({ title, link, pubDate, description, source });
+    if (title) items.push({ title, link, pubDate, description, source: effectiveSource });
   }
 
   for (const block of entryBlocks) {
@@ -256,24 +279,24 @@ function parseRSS(xml: string, source: NewsSource): RawArticle[] {
   return items;
 }
 
-async function fetchRSSFeed(url: string, source: NewsSource): Promise<RawArticle[]> {
+async function fetchRSSFeed(feed: FeedConfig): Promise<RawArticle[]> {
   try {
-    const r = await fetch(url, {
+    const r = await fetch(feed.url, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (compatible; MarketScopeBot/2.0; +https://marketscope.app)",
         Accept: "application/rss+xml, application/xml, text/xml, */*",
       },
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(feed.tier === "fallback" ? 6000 : 12000),
     });
     if (!r.ok) {
-      console.error(`RSS ${source} ${url} -> ${r.status}`);
+      console.error(`RSS ${feed.source} ${feed.url} -> ${r.status}`);
       return [];
     }
     const xml = await r.text();
-    return parseRSS(xml, source);
+    return parseRSS(xml, feed.source, feed.sourceOverride);
   } catch (e) {
-    console.error(`RSS fetch failed ${source}:`, e instanceof Error ? e.message : e);
+    console.error(`RSS fetch failed ${feed.source}:`, e instanceof Error ? e.message : e);
     return [];
   }
 }
