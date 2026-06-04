@@ -424,7 +424,7 @@ function classifyArticle(raw: RawArticle, idx: number): NewsItem | null {
   const themeBonus = Math.min(themes.length * 5, 20);
   const triggerBonus = Math.min(highHits * 4, 15);
   const geoBonus = isGeopolitical ? 10 : 0;
-  const sourceBonus = (raw.source === "Reuters" || raw.source === "Bloomberg") ? 10 : 0;
+  const sourceBonus = (raw.source === "Reuters" || raw.source === "Bloomberg" || raw.source === "Investing.com") ? 10 : 0;
   const relevanceScore = Math.min(100, impactScore + themeBonus + triggerBonus + geoBonus + sourceBonus);
 
   // Published date
