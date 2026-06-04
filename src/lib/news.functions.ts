@@ -412,7 +412,9 @@ function classifyArticle(raw: RawArticle, idx: number): NewsItem | null {
   if (markets.length === 0 && isGeopolitical) markets.push("Macro");
 
   // Status
-  const ageMs = Date.now() - new Date(raw.pubDate || Date.now()).getTime();
+  const parsedTime = parsePublishedTime(raw.pubDate);
+  const publishedTime = parsedTime ?? Date.now() - idx * 60_000;
+  const ageMs = Math.max(0, Date.now() - publishedTime);
   let status: NewsStatus = "confirmed";
   if (ageMs < 1000 * 60 * 30 && impact === "high") status = "breaking";
   else if (ageMs < 1000 * 60 * 120 && impact !== "low") status = "developing";
@@ -426,15 +428,7 @@ function classifyArticle(raw: RawArticle, idx: number): NewsItem | null {
   const relevanceScore = Math.min(100, impactScore + themeBonus + triggerBonus + geoBonus + sourceBonus);
 
   // Published date
-  let publishedAt: string;
-  try {
-    const d = raw.pubDate ? new Date(raw.pubDate) : new Date();
-    publishedAt = isNaN(d.getTime())
-      ? new Date(Date.now() - idx * 60_000).toISOString()
-      : d.toISOString();
-  } catch {
-    publishedAt = new Date(Date.now() - idx * 60_000).toISOString();
-  }
+  const publishedAt = new Date(publishedTime).toISOString();
 
     const cleanDesc = cleanText(raw.description.slice(0, 400)).slice(0, 280).trim();
     const summary = cleanDesc.length > 30 ? cleanDesc : cleanText(raw.title);
@@ -477,7 +471,7 @@ export const fetchLatestNews = createServerFn({ method: "GET" }).handler(async (
 
   try {
     const results = await Promise.allSettled(
-      RSS_FEEDS.map((f) => fetchRSSFeed(f.url, f.source)),
+      mapConcurrent(RSS_FEEDS, NEWS_FETCH_CONCURRENCY, fetchRSSFeed),
     );
 
     const allRaw: RawArticle[] = [];
