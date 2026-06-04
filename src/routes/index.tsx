@@ -25,7 +25,7 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "MarketScope — Market Intelligence Platform" },
-      { name: "description", content: "Agregator premium de știri financiare de la Reuters, CNBC, MarketWatch și Yahoo Finance. Explicate clar pentru investitori." },
+      { name: "description", content: "Agregator premium de știri financiare de la Reuters, Bloomberg, Investing.com, CNBC, MarketWatch și Yahoo Finance." },
       { property: "og:title", content: "MarketScope — Market Intelligence" },
       { property: "og:description", content: "Știrile care mișcă piețele, explicate clar." },
     ],
@@ -111,7 +111,7 @@ function HomePage() {
             <span className="text-teal">explicate clar</span>
           </h1>
           <p className="text-muted-foreground text-sm sm:text-base max-w-2xl leading-relaxed">
-            Agregăm Reuters, CNBC, MarketWatch, Yahoo Finance și Bloomberg. Filtrăm doar ce contează.
+            Agregăm Reuters, Bloomberg, Investing.com, CNBC, MarketWatch și Yahoo Finance. Filtrăm doar ce contează.
             Fiecare știre devine o analiză clară: ce s-a întâmplat, de ce contează, ce impact are.
           </p>
         </section>
@@ -204,7 +204,7 @@ function HomePage() {
         </section>
 
         <footer className="pt-8 pb-4 text-center text-[11px] text-muted-foreground">
-          MarketScope v2.0 · Reuters · CNBC · MarketWatch · Yahoo Finance · Bloomberg · Explicații AI în română
+          MarketScope v2.0 · Reuters · Bloomberg · Investing.com · CNBC · MarketWatch · Yahoo Finance · Explicații AI în română
         </footer>
       </main>
     </div>
