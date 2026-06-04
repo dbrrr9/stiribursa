@@ -95,9 +95,9 @@ const RSS_FEEDS: FeedConfig[] = [
 
   // Investing.com carries very fresh market wires, including Reuters-authored stories.
   { source: "Investing.com", sourceOverride: "Reuters", url: "https://www.investing.com/rss/news_25.rss", tier: "primary" }, // stock market / Reuters wires
-  { source: "Investing.com", url: "https://www.investing.com/rss/news_14.rss", tier: "primary" }, // economy
-  { source: "Investing.com", url: "https://www.investing.com/rss/news_11.rss", tier: "secondary" }, // commodities
-  { source: "Investing.com", url: "https://www.investing.com/rss/news_1.rss", tier: "secondary" }, // FX
+  { source: "Investing.com", sourceOverride: "Reuters", url: "https://www.investing.com/rss/news_14.rss", tier: "primary" }, // economy
+  { source: "Investing.com", sourceOverride: "Reuters", url: "https://www.investing.com/rss/news_11.rss", tier: "secondary" }, // commodities
+  { source: "Investing.com", sourceOverride: "Reuters", url: "https://www.investing.com/rss/news_1.rss", tier: "secondary" }, // FX
 
   // Direct publisher feeds.
   { source: "Yahoo Finance", url: "https://finance.yahoo.com/news/rssindex", tier: "primary" },
