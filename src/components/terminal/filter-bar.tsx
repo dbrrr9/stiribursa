@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { NewsSource, ThemeTag, ImpactLevel } from "@/lib/news-types";
 import { THEME_LABELS } from "@/lib/news-types";
 
-const SOURCES: NewsSource[] = ["Reuters", "Bloomberg", "Yahoo Finance", "CNBC", "MarketWatch"];
+const SOURCES: NewsSource[] = ["Reuters", "Bloomberg", "Investing.com", "Yahoo Finance", "CNBC", "MarketWatch"];
 const THEMES: ThemeTag[] = ["actiuni", "obligatiuni", "indici", "forex", "marfuri", "crypto", "macro", "earnings", "banci-centrale", "geopolitica"];
 const IMPACTS: ImpactLevel[] = ["high", "medium", "low"];
 
