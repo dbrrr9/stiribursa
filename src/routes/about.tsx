@@ -20,8 +20,8 @@ function About() {
         <div className="ms-card p-6 prose-finance space-y-4">
           <p>
             <strong>MarketScope</strong> este o platformă de market intelligence care agregă cele
-            mai relevante știri din <strong>Reuters</strong>, <strong>CNBC</strong>,{" "}
-            <strong>MarketWatch</strong>, <strong>Yahoo Finance</strong> și <strong>Bloomberg</strong>,
+            mai relevante știri din <strong>Reuters</strong>, <strong>Bloomberg</strong>,{" "}
+            <strong>Investing.com</strong>, <strong>CNBC</strong>, <strong>MarketWatch</strong> și <strong>Yahoo Finance</strong>,
             le filtrează și le transformă în analize clare în limba română.
           </p>
           <p>
