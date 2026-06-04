@@ -81,50 +81,46 @@ function checkRateLimit(userId: string): boolean {
 
 
 // ============================================================================
-// RSS FEEDS — expanded for better geopolitical + market coverage
+// RSS FEEDS — stable direct feeds first; Google News only as fallback
 // ============================================================================
-type FeedTier = "primary" | "secondary";
-const RSS_FEEDS: { source: NewsSource; url: string; tier: FeedTier }[] = [
-  // === REUTERS — broad coverage ===
-  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+when:2d+(markets+OR+stocks+OR+economy+OR+fed+OR+earnings)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
-  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+when:2d+(iran+OR+sanctions+OR+war+OR+geopolitics+OR+tariff+OR+trade+war+OR+middle+east)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
-  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+when:2d+(oil+OR+gold+OR+treasury+OR+inflation+OR+recession+OR+china+OR+russia)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
-  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+when:2d+(nuclear+OR+deal+OR+sanctions+OR+drone+OR+attack+OR+military+OR+defense)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
-  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+when:2d+(tech+OR+AI+OR+semiconductor+OR+Intel+OR+AMD+OR+Nvidia+OR+Micron+OR+Apple+OR+Microsoft)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
-  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+when:2d+(breaking+OR+wall+street+OR+dow+OR+nasdaq+OR+s%26p+OR+bonds+OR+yields)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
-  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+when:2d+(OPEC+OR+energy+OR+natural+gas+OR+crude+OR+brent+OR+petroleum)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
-  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+when:2d+(Trump+OR+Biden+OR+congress+OR+tariff+OR+trade+OR+policy)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
+type FeedTier = "primary" | "secondary" | "fallback";
+type FeedConfig = { source: NewsSource; url: string; tier: FeedTier; sourceOverride?: NewsSource };
 
-  // === BLOOMBERG — broad coverage ===
-  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+when:2d+(markets+OR+stocks+OR+economy+OR+fed+OR+earnings+OR+oil+OR+gold)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
-  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+when:2d+(iran+OR+sanctions+OR+war+OR+geopolitics+OR+tariff+OR+trade+OR+defense)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
-  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+when:2d+(tech+OR+semiconductor+OR+Intel+OR+AMD+OR+Nvidia+OR+Micron+OR+AI+OR+Apple)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
-  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+when:2d+(breaking+OR+wall+street+OR+dow+OR+nasdaq+OR+s%26p+OR+bonds+OR+yields+OR+dollar)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
-  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+when:2d+(crypto+OR+bitcoin+OR+inflation+OR+recession+OR+china+OR+treasury)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
-  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+when:2d+(OPEC+OR+energy+OR+oil+OR+gold+OR+commodities+OR+copper+OR+silver)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
-  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+when:2d+(Trump+OR+Biden+OR+election+OR+congress+OR+policy+OR+regulation)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
+const RSS_FEEDS: FeedConfig[] = [
+  // Bloomberg direct feeds are fast and consistently fresh.
+  { source: "Bloomberg", url: "https://feeds.bloomberg.com/markets/news.rss", tier: "primary" },
+  { source: "Bloomberg", url: "https://feeds.bloomberg.com/economics/news.rss", tier: "primary" },
+  { source: "Bloomberg", url: "https://feeds.bloomberg.com/technology/news.rss", tier: "primary" },
+  { source: "Bloomberg", url: "https://feeds.bloomberg.com/politics/news.rss", tier: "secondary" },
 
-  // === Yahoo Finance ===
+  // Investing.com carries very fresh market wires, including Reuters-authored stories.
+  { source: "Investing.com", sourceOverride: "Reuters", url: "https://www.investing.com/rss/news_25.rss", tier: "primary" }, // stock market / Reuters wires
+  { source: "Investing.com", url: "https://www.investing.com/rss/news_14.rss", tier: "primary" }, // economy
+  { source: "Investing.com", url: "https://www.investing.com/rss/news_11.rss", tier: "secondary" }, // commodities
+  { source: "Investing.com", url: "https://www.investing.com/rss/news_1.rss", tier: "secondary" }, // FX
+
+  // Direct publisher feeds.
   { source: "Yahoo Finance", url: "https://finance.yahoo.com/news/rssindex", tier: "primary" },
-  { source: "Yahoo Finance", url: "https://news.google.com/rss/search?q=site:finance.yahoo.com+(markets+OR+stocks+OR+earnings+OR+economy)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
-  { source: "Yahoo Finance", url: "https://news.google.com/rss/search?q=site:finance.yahoo.com+(oil+OR+gold+OR+tech+OR+Iran+OR+war+OR+tariff)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
-
-  // === CNBC ===
   { source: "CNBC", url: "https://www.cnbc.com/id/10000664/device/rss/rss.html", tier: "primary" },
   { source: "CNBC", url: "https://www.cnbc.com/id/10001147/device/rss/rss.html", tier: "primary" },
-  { source: "CNBC", url: "https://www.cnbc.com/id/19854910/device/rss/rss.html", tier: "secondary" }, // Technology
-  { source: "CNBC", url: "https://www.cnbc.com/id/20910258/device/rss/rss.html", tier: "secondary" }, // Energy
-  { source: "CNBC", url: "https://news.google.com/rss/search?q=site:cnbc.com+(Iran+OR+oil+OR+war+OR+tariff+OR+semiconductor)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
-
-  // === MarketWatch ===
+  { source: "CNBC", url: "https://www.cnbc.com/id/19854910/device/rss/rss.html", tier: "secondary" },
+  { source: "CNBC", url: "https://www.cnbc.com/id/20910258/device/rss/rss.html", tier: "secondary" },
   { source: "MarketWatch", url: "https://feeds.content.dowjones.io/public/rss/mw_topstories", tier: "primary" },
   { source: "MarketWatch", url: "https://feeds.content.dowjones.io/public/rss/mw_marketpulse", tier: "secondary" },
-  { source: "MarketWatch", url: "https://news.google.com/rss/search?q=site:marketwatch.com+(markets+OR+stocks+OR+oil+OR+gold+OR+tech+OR+fed)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
+
+  // Google News search sometimes returns 503/timeouts; keep it as low-priority fallback only.
+  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+markets+stocks+economy+fed+earnings+when:1d&hl=en-US&gl=US&ceid=US:en", tier: "fallback" },
+  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+oil+gold+treasury+inflation+geopolitics+when:1d&hl=en-US&gl=US&ceid=US:en", tier: "fallback" },
+  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+markets+stocks+economy+fed+earnings+when:1d&hl=en-US&gl=US&ceid=US:en", tier: "fallback" },
 ];
 
-const TARGET_TOTAL = 150;
-const MAX_AGE_MS = 1000 * 60 * 60 * 36; // 36h — prioritise fresh news
-const MIN_RELEVANCE = 35;
+const TARGET_TOTAL = 120;
+const MAX_AGE_MS = 1000 * 60 * 60 * 24; // 24h — never show stale live articles
+const IDEAL_FRESH_AGE_MS = 1000 * 60 * 60 * 12; // strongest ranking boost for recent news
+const MIN_RELEVANCE = 30;
+const MIN_LIVE_ITEMS_BEFORE_SEED = 6;
+const NEWS_FETCH_CONCURRENCY = 6;
+const EMPTY_RETRY_DELAY_MS = 1000 * 45;
 
 // ============================================================================
 // AI helper
