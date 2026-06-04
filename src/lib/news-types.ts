@@ -3,7 +3,8 @@ export type NewsSource =
   | "Bloomberg"
   | "Yahoo Finance"
   | "CNBC"
-  | "MarketWatch";
+  | "MarketWatch"
+  | "Investing.com";
 export type ImpactLevel = "high" | "medium" | "low";
 export type Sentiment = "positive" | "negative" | "mixed" | "uncertain";
 export type NewsStatus = "breaking" | "developing" | "confirmed" | "low-relevance";
