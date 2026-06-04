@@ -470,14 +470,8 @@ export const fetchLatestNews = createServerFn({ method: "GET" }).handler(async (
   }
 
   try {
-    const results = await Promise.allSettled(
-      mapConcurrent(RSS_FEEDS, NEWS_FETCH_CONCURRENCY, fetchRSSFeed),
-    );
-
-    const allRaw: RawArticle[] = [];
-    for (const r of results) {
-      if (r.status === "fulfilled") allRaw.push(...r.value);
-    }
+    const feedResults = await mapConcurrent(RSS_FEEDS, NEWS_FETCH_CONCURRENCY, fetchRSSFeed);
+    const allRaw = feedResults.flat();
 
     // Dedupe by title similarity
     const seen = new Set<string>();
@@ -502,12 +496,7 @@ export const fetchLatestNews = createServerFn({ method: "GET" }).handler(async (
         (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
       );
 
-      // If we got very few live items, top up with seed so the feed never looks empty
-      let items = classified.slice(0, TARGET_TOTAL);
-      if (items.length < 12) {
-        const seenIds = new Set(items.map((n) => n.id));
-        items = [...items, ...SEED_NEWS.filter((n) => !seenIds.has(n.id))].slice(0, TARGET_TOTAL);
-      }
+      const items = classified.slice(0, TARGET_TOTAL);
       newsCache = { items, ts: Date.now() };
       return { items, cached: false, source: "live" as const };
     }
@@ -516,7 +505,7 @@ export const fetchLatestNews = createServerFn({ method: "GET" }).handler(async (
   }
 
   // No live news at all — serve seed but cache briefly so the next request retries the feeds
-  newsCache = { items: SEED_NEWS, ts: Date.now() - (CACHE_TTL_MS - 1000 * 60) };
+  newsCache = { items: SEED_NEWS, ts: Date.now() - (CACHE_TTL_MS - EMPTY_RETRY_DELAY_MS) };
   return { items: SEED_NEWS, cached: false, source: "seed" as const };
 });
 
