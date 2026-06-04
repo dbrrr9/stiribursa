@@ -53,6 +53,7 @@ const SOURCE_COLORS: Record<NewsSource, string> = {
   "Yahoo Finance": "text-indigo-600 bg-indigo-50",
   CNBC: "text-blue-700 bg-blue-50",
   MarketWatch: "text-emerald-700 bg-emerald-50",
+  "Investing.com": "text-sentiment-positive bg-sentiment-positive/8",
 };
 
 export function SourceBadge({ source }: { source: NewsSource }) {
