@@ -81,50 +81,46 @@ function checkRateLimit(userId: string): boolean {
 
 
 // ============================================================================
-// RSS FEEDS — expanded for better geopolitical + market coverage
+// RSS FEEDS — stable direct feeds first; Google News only as fallback
 // ============================================================================
-type FeedTier = "primary" | "secondary";
-const RSS_FEEDS: { source: NewsSource; url: string; tier: FeedTier }[] = [
-  // === REUTERS — broad coverage ===
-  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+when:2d+(markets+OR+stocks+OR+economy+OR+fed+OR+earnings)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
-  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+when:2d+(iran+OR+sanctions+OR+war+OR+geopolitics+OR+tariff+OR+trade+war+OR+middle+east)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
-  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+when:2d+(oil+OR+gold+OR+treasury+OR+inflation+OR+recession+OR+china+OR+russia)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
-  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+when:2d+(nuclear+OR+deal+OR+sanctions+OR+drone+OR+attack+OR+military+OR+defense)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
-  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+when:2d+(tech+OR+AI+OR+semiconductor+OR+Intel+OR+AMD+OR+Nvidia+OR+Micron+OR+Apple+OR+Microsoft)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
-  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+when:2d+(breaking+OR+wall+street+OR+dow+OR+nasdaq+OR+s%26p+OR+bonds+OR+yields)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
-  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+when:2d+(OPEC+OR+energy+OR+natural+gas+OR+crude+OR+brent+OR+petroleum)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
-  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+when:2d+(Trump+OR+Biden+OR+congress+OR+tariff+OR+trade+OR+policy)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
+type FeedTier = "primary" | "secondary" | "fallback";
+type FeedConfig = { source: NewsSource; url: string; tier: FeedTier; sourceOverride?: NewsSource };
 
-  // === BLOOMBERG — broad coverage ===
-  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+when:2d+(markets+OR+stocks+OR+economy+OR+fed+OR+earnings+OR+oil+OR+gold)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
-  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+when:2d+(iran+OR+sanctions+OR+war+OR+geopolitics+OR+tariff+OR+trade+OR+defense)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
-  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+when:2d+(tech+OR+semiconductor+OR+Intel+OR+AMD+OR+Nvidia+OR+Micron+OR+AI+OR+Apple)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
-  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+when:2d+(breaking+OR+wall+street+OR+dow+OR+nasdaq+OR+s%26p+OR+bonds+OR+yields+OR+dollar)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
-  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+when:2d+(crypto+OR+bitcoin+OR+inflation+OR+recession+OR+china+OR+treasury)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
-  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+when:2d+(OPEC+OR+energy+OR+oil+OR+gold+OR+commodities+OR+copper+OR+silver)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
-  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+when:2d+(Trump+OR+Biden+OR+election+OR+congress+OR+policy+OR+regulation)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
+const RSS_FEEDS: FeedConfig[] = [
+  // Bloomberg direct feeds are fast and consistently fresh.
+  { source: "Bloomberg", url: "https://feeds.bloomberg.com/markets/news.rss", tier: "primary" },
+  { source: "Bloomberg", url: "https://feeds.bloomberg.com/economics/news.rss", tier: "primary" },
+  { source: "Bloomberg", url: "https://feeds.bloomberg.com/technology/news.rss", tier: "primary" },
+  { source: "Bloomberg", url: "https://feeds.bloomberg.com/politics/news.rss", tier: "secondary" },
 
-  // === Yahoo Finance ===
+  // Investing.com carries very fresh market wires, including Reuters-authored stories.
+  { source: "Investing.com", sourceOverride: "Reuters", url: "https://www.investing.com/rss/news_25.rss", tier: "primary" }, // stock market / Reuters wires
+  { source: "Investing.com", sourceOverride: "Reuters", url: "https://www.investing.com/rss/news_14.rss", tier: "primary" }, // economy
+  { source: "Investing.com", sourceOverride: "Reuters", url: "https://www.investing.com/rss/news_11.rss", tier: "secondary" }, // commodities
+  { source: "Investing.com", sourceOverride: "Reuters", url: "https://www.investing.com/rss/news_1.rss", tier: "secondary" }, // FX
+
+  // Direct publisher feeds.
   { source: "Yahoo Finance", url: "https://finance.yahoo.com/news/rssindex", tier: "primary" },
-  { source: "Yahoo Finance", url: "https://news.google.com/rss/search?q=site:finance.yahoo.com+(markets+OR+stocks+OR+earnings+OR+economy)&hl=en-US&gl=US&ceid=US:en", tier: "primary" },
-  { source: "Yahoo Finance", url: "https://news.google.com/rss/search?q=site:finance.yahoo.com+(oil+OR+gold+OR+tech+OR+Iran+OR+war+OR+tariff)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
-
-  // === CNBC ===
   { source: "CNBC", url: "https://www.cnbc.com/id/10000664/device/rss/rss.html", tier: "primary" },
   { source: "CNBC", url: "https://www.cnbc.com/id/10001147/device/rss/rss.html", tier: "primary" },
-  { source: "CNBC", url: "https://www.cnbc.com/id/19854910/device/rss/rss.html", tier: "secondary" }, // Technology
-  { source: "CNBC", url: "https://www.cnbc.com/id/20910258/device/rss/rss.html", tier: "secondary" }, // Energy
-  { source: "CNBC", url: "https://news.google.com/rss/search?q=site:cnbc.com+(Iran+OR+oil+OR+war+OR+tariff+OR+semiconductor)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
-
-  // === MarketWatch ===
+  { source: "CNBC", url: "https://www.cnbc.com/id/19854910/device/rss/rss.html", tier: "secondary" },
+  { source: "CNBC", url: "https://www.cnbc.com/id/20910258/device/rss/rss.html", tier: "secondary" },
   { source: "MarketWatch", url: "https://feeds.content.dowjones.io/public/rss/mw_topstories", tier: "primary" },
   { source: "MarketWatch", url: "https://feeds.content.dowjones.io/public/rss/mw_marketpulse", tier: "secondary" },
-  { source: "MarketWatch", url: "https://news.google.com/rss/search?q=site:marketwatch.com+(markets+OR+stocks+OR+oil+OR+gold+OR+tech+OR+fed)&hl=en-US&gl=US&ceid=US:en", tier: "secondary" },
+
+  // Google News search sometimes returns 503/timeouts; keep it as low-priority fallback only.
+  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+markets+stocks+economy+fed+earnings+when:1d&hl=en-US&gl=US&ceid=US:en", tier: "fallback" },
+  { source: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com+oil+gold+treasury+inflation+geopolitics+when:1d&hl=en-US&gl=US&ceid=US:en", tier: "fallback" },
+  { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+markets+stocks+economy+fed+earnings+when:1d&hl=en-US&gl=US&ceid=US:en", tier: "fallback" },
 ];
 
-const TARGET_TOTAL = 150;
-const MAX_AGE_MS = 1000 * 60 * 60 * 36; // 36h — prioritise fresh news
-const MIN_RELEVANCE = 35;
+const TARGET_TOTAL = 120;
+const MAX_AGE_MS = 1000 * 60 * 60 * 24; // 24h — never show stale live articles
+const IDEAL_FRESH_AGE_MS = 1000 * 60 * 60 * 12; // strongest ranking boost for recent news
+const MIN_RELEVANCE = 30;
+const MIN_LIVE_ITEMS_BEFORE_SEED = 6;
+const NEWS_FETCH_CONCURRENCY = 6;
+const EMPTY_RETRY_DELAY_MS = 1000 * 45;
 
 // ============================================================================
 // AI helper
@@ -188,6 +184,27 @@ interface RawArticle {
   source: NewsSource;
 }
 
+function parsePublishedTime(value?: string | null): number | null {
+  if (!value) return null;
+  const normalized = value.trim().replace(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})$/, "$1T$2Z");
+  const t = new Date(normalized).getTime();
+  if (Number.isNaN(t) || t < 946684800000) return null;
+  return t;
+}
+
+async function mapConcurrent<T, R>(items: T[], limit: number, mapper: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex++;
+      results[index] = await mapper(items[index]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 function decodeEntities(s: string): string {
   return s
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
@@ -227,7 +244,7 @@ function extractTag(block: string, tag: string): string {
   return m ? decodeEntities(m[1]) : "";
 }
 
-function parseRSS(xml: string, source: NewsSource): RawArticle[] {
+function parseRSS(xml: string, source: NewsSource, sourceOverride?: NewsSource): RawArticle[] {
   const items: RawArticle[] = [];
   const itemBlocks = xml.match(/<item[\s>][\s\S]*?<\/item>/gi) ?? [];
   const entryBlocks = xml.match(/<entry[\s>][\s\S]*?<\/entry>/gi) ?? [];
@@ -243,8 +260,10 @@ function parseRSS(xml: string, source: NewsSource): RawArticle[] {
       extractTag(block, "description") ||
       extractTag(block, "content:encoded") ||
       extractTag(block, "summary");
+    const author = extractTag(block, "author") || extractTag(block, "dc:creator");
+    const effectiveSource = sourceOverride && author.toLowerCase().includes(sourceOverride.toLowerCase()) ? sourceOverride : source;
     title = stripSuffix(title);
-    if (title) items.push({ title, link, pubDate, description, source });
+    if (title) items.push({ title, link, pubDate, description, source: effectiveSource });
   }
 
   for (const block of entryBlocks) {
@@ -260,24 +279,24 @@ function parseRSS(xml: string, source: NewsSource): RawArticle[] {
   return items;
 }
 
-async function fetchRSSFeed(url: string, source: NewsSource): Promise<RawArticle[]> {
+async function fetchRSSFeed(feed: FeedConfig): Promise<RawArticle[]> {
   try {
-    const r = await fetch(url, {
+    const r = await fetch(feed.url, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (compatible; MarketScopeBot/2.0; +https://marketscope.app)",
         Accept: "application/rss+xml, application/xml, text/xml, */*",
       },
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(feed.tier === "fallback" ? 6000 : 12000),
     });
     if (!r.ok) {
-      console.error(`RSS ${source} ${url} -> ${r.status}`);
+      console.error(`RSS ${feed.source} ${feed.url} -> ${r.status}`);
       return [];
     }
     const xml = await r.text();
-    return parseRSS(xml, source);
+    return parseRSS(xml, feed.source, feed.sourceOverride);
   } catch (e) {
-    console.error(`RSS fetch failed ${source}:`, e instanceof Error ? e.message : e);
+    console.error(`RSS fetch failed ${feed.source}:`, e instanceof Error ? e.message : e);
     return [];
   }
 }
@@ -393,7 +412,9 @@ function classifyArticle(raw: RawArticle, idx: number): NewsItem | null {
   if (markets.length === 0 && isGeopolitical) markets.push("Macro");
 
   // Status
-  const ageMs = Date.now() - new Date(raw.pubDate || Date.now()).getTime();
+  const parsedTime = parsePublishedTime(raw.pubDate);
+  const publishedTime = parsedTime ?? Date.now() - idx * 60_000;
+  const ageMs = Math.max(0, Date.now() - publishedTime);
   let status: NewsStatus = "confirmed";
   if (ageMs < 1000 * 60 * 30 && impact === "high") status = "breaking";
   else if (ageMs < 1000 * 60 * 120 && impact !== "low") status = "developing";
@@ -403,19 +424,11 @@ function classifyArticle(raw: RawArticle, idx: number): NewsItem | null {
   const themeBonus = Math.min(themes.length * 5, 20);
   const triggerBonus = Math.min(highHits * 4, 15);
   const geoBonus = isGeopolitical ? 10 : 0;
-  const sourceBonus = (raw.source === "Reuters" || raw.source === "Bloomberg") ? 10 : 0;
+  const sourceBonus = (raw.source === "Reuters" || raw.source === "Bloomberg" || raw.source === "Investing.com") ? 10 : 0;
   const relevanceScore = Math.min(100, impactScore + themeBonus + triggerBonus + geoBonus + sourceBonus);
 
   // Published date
-  let publishedAt: string;
-  try {
-    const d = raw.pubDate ? new Date(raw.pubDate) : new Date();
-    publishedAt = isNaN(d.getTime())
-      ? new Date(Date.now() - idx * 60_000).toISOString()
-      : d.toISOString();
-  } catch {
-    publishedAt = new Date(Date.now() - idx * 60_000).toISOString();
-  }
+  const publishedAt = new Date(publishedTime).toISOString();
 
     const cleanDesc = cleanText(raw.description.slice(0, 400)).slice(0, 280).trim();
     const summary = cleanDesc.length > 30 ? cleanDesc : cleanText(raw.title);
@@ -457,14 +470,8 @@ export const fetchLatestNews = createServerFn({ method: "GET" }).handler(async (
   }
 
   try {
-    const results = await Promise.allSettled(
-      RSS_FEEDS.map((f) => fetchRSSFeed(f.url, f.source)),
-    );
-
-    const allRaw: RawArticle[] = [];
-    for (const r of results) {
-      if (r.status === "fulfilled") allRaw.push(...r.value);
-    }
+    const feedResults = await mapConcurrent(RSS_FEEDS, NEWS_FETCH_CONCURRENCY, fetchRSSFeed);
+    const allRaw = feedResults.flat();
 
     // Dedupe by title similarity
     const seen = new Set<string>();
@@ -489,12 +496,7 @@ export const fetchLatestNews = createServerFn({ method: "GET" }).handler(async (
         (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
       );
 
-      // If we got very few live items, top up with seed so the feed never looks empty
-      let items = classified.slice(0, TARGET_TOTAL);
-      if (items.length < 12) {
-        const seenIds = new Set(items.map((n) => n.id));
-        items = [...items, ...SEED_NEWS.filter((n) => !seenIds.has(n.id))].slice(0, TARGET_TOTAL);
-      }
+      const items = classified.slice(0, TARGET_TOTAL);
       newsCache = { items, ts: Date.now() };
       return { items, cached: false, source: "live" as const };
     }
@@ -503,7 +505,7 @@ export const fetchLatestNews = createServerFn({ method: "GET" }).handler(async (
   }
 
   // No live news at all — serve seed but cache briefly so the next request retries the feeds
-  newsCache = { items: SEED_NEWS, ts: Date.now() - (CACHE_TTL_MS - 1000 * 60) };
+  newsCache = { items: SEED_NEWS, ts: Date.now() - (CACHE_TTL_MS - EMPTY_RETRY_DELAY_MS) };
   return { items: SEED_NEWS, cached: false, source: "seed" as const };
 });
 
