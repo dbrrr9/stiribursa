@@ -352,6 +352,37 @@ const HIGH_IMPACT_TRIGGERS = [
 const NEGATIVE_WORDS = ["fall", "drop", "plunge", "crash", "loss", "miss", "weak", "decline", "fear", "concern", "warn", "cut", "recession", "slump", "threat", "escalat", "strike", "bomb", "kill", "casualties", "collapse"];
 const POSITIVE_WORDS = ["rise", "surge", "gain", "jump", "rally", "beat", "strong", "growth", "record", "high", "boost", "upgrade", "ceasefire", "peace", "deal", "agree", "recover"];
 
+// ============================================================================
+// NOISE FILTER — reject clickbait/listicle/lifestyle junk (esp. Yahoo Finance)
+// ============================================================================
+const NOISE_PATTERNS: RegExp[] = [
+  /\b\d+\s+(stocks?|things?|ways?|reasons?|tips?|moves?|etfs?|funds?|dividend)\b/i, // "3 stocks to buy", "5 things"
+  /\bmotley fool\b/i,
+  /\b(should you buy|is it too late|here'?s why|here'?s what|what to know|how to|how i|why i)\b/i,
+  /\b(my|your) (retirement|portfolio|401k|paycheck|salary|savings)\b/i,
+  /\b(billionaire|millionaire|net worth|celebrity|kardashian|influencer)\b/i,
+  /\b(best (buy|deal|deals|discount)|prime day|black friday|cyber monday|coupon|gift guide|shopping)\b/i,
+  /\b(horoscope|recipe|workout|weight loss|dating|travel guide|vacation)\b/i,
+  /\b(zacks|analyst (says|reveals)|top pick|stock to watch|hot stock|penny stock)\b/i,
+  /\b(could make you|make you rich|to buy now|to buy and hold|monster stock|no-brainer)\b/i,
+  /\bsponsored\b/i,
+];
+
+function isNoise(text: string): boolean {
+  return NOISE_PATTERNS.some((p) => p.test(text));
+}
+
+// "Strong" financial keywords — used to require real market relevance, not a single weak match
+const STRONG_FINANCIAL_KEYWORDS = [
+  "fed", "fomc", "ecb", "boe", "boj", "powell", "lagarde", "rate hike", "rate cut", "interest rate",
+  "inflation", "cpi", "ppi", "gdp", "recession", "jobs report", "nonfarm", "treasury", "yield", "bond",
+  "stock", "shares", "equities", "nasdaq", "s&p", "dow", "earnings", "revenue", "guidance",
+  "oil", "brent", "wti", "opec", "gold", "dollar", "euro", "yen", "currency",
+  "bitcoin", "ethereum", "crypto", "tariff", "sanction", "merger", "acquisition", "ipo",
+  "nvidia", "apple", "microsoft", "tesla", "amazon", "meta", "google", "semiconductor",
+];
+
+
 function classifyArticle(raw: RawArticle, idx: number): NewsItem | null {
   const text = `${raw.title} ${raw.description}`.toLowerCase();
 
