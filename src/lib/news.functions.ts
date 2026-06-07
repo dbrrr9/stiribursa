@@ -539,7 +539,8 @@ export const fetchLatestNews = createServerFn({ method: "GET" }).handler(async (
       .map((a, i) => classifyArticle(a, i))
       .filter((x): x is NewsItem => x !== null)
       .filter((n) => now - new Date(n.publishedAt).getTime() <= MAX_AGE_MS)
-      .filter((n) => n.relevanceScore >= MIN_RELEVANCE);
+      .filter((n) => n.relevanceScore >= (SOURCE_MIN_RELEVANCE[n.source] ?? MIN_RELEVANCE));
+
 
     if (classified.length >= 1) {
       classified.sort(
