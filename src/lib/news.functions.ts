@@ -384,11 +384,17 @@ const STRONG_FINANCIAL_KEYWORDS = [
 
 
 function classifyArticle(raw: RawArticle, idx: number): NewsItem | null {
+  const title = raw.title.toLowerCase();
   const text = `${raw.title} ${raw.description}`.toLowerCase();
 
-  // Check for financial or geopolitical relevance
-  const financialHit = Object.values(THEME_KEYWORDS).flat().some((k) => text.includes(k));
-  if (!financialHit) return null;
+  // Reject clickbait / listicle / lifestyle junk outright
+  if (isNoise(text)) return null;
+
+  // Require real market relevance: at least one STRONG financial keyword,
+  // or a geopolitical keyword (geopolitics is high-value even with one hit)
+  const strongHits = STRONG_FINANCIAL_KEYWORDS.filter((k) => text.includes(k)).length;
+  const isGeo = THEME_KEYWORDS.geopolitica.some((k) => text.includes(k));
+  if (strongHits === 0 && !isGeo) return null;
 
   // Themes
   const themes: ThemeTag[] = [];
@@ -396,6 +402,7 @@ function classifyArticle(raw: RawArticle, idx: number): NewsItem | null {
     if (kws.some((k) => text.includes(k))) themes.push(theme);
   }
   if (themes.length === 0) return null;
+
 
   // Geopolitical news with market implications should always get a market theme too
   if (themes.includes("geopolitica") && !themes.some(t => ["actiuni", "marfuri", "forex", "obligatiuni", "indici"].includes(t))) {
