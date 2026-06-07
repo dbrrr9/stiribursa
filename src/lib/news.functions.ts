@@ -114,13 +114,18 @@ const RSS_FEEDS: FeedConfig[] = [
   { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+markets+stocks+economy+fed+earnings+when:1d&hl=en-US&gl=US&ceid=US:en", tier: "fallback" },
 ];
 
-const TARGET_TOTAL = 120;
+const TARGET_TOTAL = 60; // keep the feed curated, not spammy
 const MAX_AGE_MS = 1000 * 60 * 60 * 24; // 24h — never show stale live articles
 const IDEAL_FRESH_AGE_MS = 1000 * 60 * 60 * 12; // strongest ranking boost for recent news
-const MIN_RELEVANCE = 30;
+const MIN_RELEVANCE = 45; // raised — only relevant news passes
+// Yahoo Finance carries a lot of low-signal/clickbait content, so it needs a higher bar
+const SOURCE_MIN_RELEVANCE: Partial<Record<NewsSource, number>> = {
+  "Yahoo Finance": 62,
+};
 const MIN_LIVE_ITEMS_BEFORE_SEED = 6;
 const NEWS_FETCH_CONCURRENCY = 6;
 const EMPTY_RETRY_DELAY_MS = 1000 * 45;
+
 
 // ============================================================================
 // AI helper
@@ -352,12 +357,49 @@ const HIGH_IMPACT_TRIGGERS = [
 const NEGATIVE_WORDS = ["fall", "drop", "plunge", "crash", "loss", "miss", "weak", "decline", "fear", "concern", "warn", "cut", "recession", "slump", "threat", "escalat", "strike", "bomb", "kill", "casualties", "collapse"];
 const POSITIVE_WORDS = ["rise", "surge", "gain", "jump", "rally", "beat", "strong", "growth", "record", "high", "boost", "upgrade", "ceasefire", "peace", "deal", "agree", "recover"];
 
+// ============================================================================
+// NOISE FILTER — reject clickbait/listicle/lifestyle junk (esp. Yahoo Finance)
+// ============================================================================
+const NOISE_PATTERNS: RegExp[] = [
+  /\b\d+\s+(stocks?|things?|ways?|reasons?|tips?|moves?|etfs?|funds?|dividend)\b/i, // "3 stocks to buy", "5 things"
+  /\bmotley fool\b/i,
+  /\b(should you buy|is it too late|here'?s why|here'?s what|what to know|how to|how i|why i)\b/i,
+  /\b(my|your) (retirement|portfolio|401k|paycheck|salary|savings)\b/i,
+  /\b(billionaire|millionaire|net worth|celebrity|kardashian|influencer)\b/i,
+  /\b(best (buy|deal|deals|discount)|prime day|black friday|cyber monday|coupon|gift guide|shopping)\b/i,
+  /\b(horoscope|recipe|workout|weight loss|dating|travel guide|vacation)\b/i,
+  /\b(zacks|analyst (says|reveals)|top pick|stock to watch|hot stock|penny stock)\b/i,
+  /\b(could make you|make you rich|to buy now|to buy and hold|monster stock|no-brainer)\b/i,
+  /\bsponsored\b/i,
+];
+
+function isNoise(text: string): boolean {
+  return NOISE_PATTERNS.some((p) => p.test(text));
+}
+
+// "Strong" financial keywords — used to require real market relevance, not a single weak match
+const STRONG_FINANCIAL_KEYWORDS = [
+  "fed", "fomc", "ecb", "boe", "boj", "powell", "lagarde", "rate hike", "rate cut", "interest rate",
+  "inflation", "cpi", "ppi", "gdp", "recession", "jobs report", "nonfarm", "treasury", "yield", "bond",
+  "stock", "shares", "equities", "nasdaq", "s&p", "dow", "earnings", "revenue", "guidance",
+  "oil", "brent", "wti", "opec", "gold", "dollar", "euro", "yen", "currency",
+  "bitcoin", "ethereum", "crypto", "tariff", "sanction", "merger", "acquisition", "ipo",
+  "nvidia", "apple", "microsoft", "tesla", "amazon", "meta", "google", "semiconductor",
+];
+
+
 function classifyArticle(raw: RawArticle, idx: number): NewsItem | null {
+  const title = raw.title.toLowerCase();
   const text = `${raw.title} ${raw.description}`.toLowerCase();
 
-  // Check for financial or geopolitical relevance
-  const financialHit = Object.values(THEME_KEYWORDS).flat().some((k) => text.includes(k));
-  if (!financialHit) return null;
+  // Reject clickbait / listicle / lifestyle junk outright
+  if (isNoise(text)) return null;
+
+  // Require real market relevance: at least one STRONG financial keyword,
+  // or a geopolitical keyword (geopolitics is high-value even with one hit)
+  const strongHits = STRONG_FINANCIAL_KEYWORDS.filter((k) => text.includes(k)).length;
+  const isGeo = THEME_KEYWORDS.geopolitica.some((k) => text.includes(k));
+  if (strongHits === 0 && !isGeo) return null;
 
   // Themes
   const themes: ThemeTag[] = [];
@@ -365,6 +407,7 @@ function classifyArticle(raw: RawArticle, idx: number): NewsItem | null {
     if (kws.some((k) => text.includes(k))) themes.push(theme);
   }
   if (themes.length === 0) return null;
+
 
   // Geopolitical news with market implications should always get a market theme too
   if (themes.includes("geopolitica") && !themes.some(t => ["actiuni", "marfuri", "forex", "obligatiuni", "indici"].includes(t))) {
@@ -419,13 +462,20 @@ function classifyArticle(raw: RawArticle, idx: number): NewsItem | null {
   if (ageMs < 1000 * 60 * 30 && impact === "high") status = "breaking";
   else if (ageMs < 1000 * 60 * 120 && impact !== "low") status = "developing";
 
-  // Relevance score — boosted for geopolitical + multi-theme
+  // Relevance score — boosted for geopolitical + multi-theme + strong signals
   const impactScore = impact === "high" ? 80 : impact === "medium" ? 55 : 30;
   const themeBonus = Math.min(themes.length * 5, 20);
   const triggerBonus = Math.min(highHits * 4, 15);
+  const strongBonus = Math.min(strongHits * 4, 16);
   const geoBonus = isGeopolitical ? 10 : 0;
   const sourceBonus = (raw.source === "Reuters" || raw.source === "Bloomberg" || raw.source === "Investing.com") ? 10 : 0;
-  const relevanceScore = Math.min(100, impactScore + themeBonus + triggerBonus + geoBonus + sourceBonus);
+  // Penalize thin/weak items that only matched a single keyword and have no real signal
+  const thinPenalty = strongHits <= 1 && highHits === 0 && themes.length < 2 ? 18 : 0;
+  const relevanceScore = Math.max(
+    0,
+    Math.min(100, impactScore + themeBonus + triggerBonus + strongBonus + geoBonus + sourceBonus - thinPenalty),
+  );
+
 
   // Published date
   const publishedAt = new Date(publishedTime).toISOString();
@@ -489,7 +539,8 @@ export const fetchLatestNews = createServerFn({ method: "GET" }).handler(async (
       .map((a, i) => classifyArticle(a, i))
       .filter((x): x is NewsItem => x !== null)
       .filter((n) => now - new Date(n.publishedAt).getTime() <= MAX_AGE_MS)
-      .filter((n) => n.relevanceScore >= MIN_RELEVANCE);
+      .filter((n) => n.relevanceScore >= (SOURCE_MIN_RELEVANCE[n.source] ?? MIN_RELEVANCE));
+
 
     if (classified.length >= 1) {
       classified.sort(
