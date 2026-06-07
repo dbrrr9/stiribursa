@@ -114,13 +114,18 @@ const RSS_FEEDS: FeedConfig[] = [
   { source: "Bloomberg", url: "https://news.google.com/rss/search?q=site:bloomberg.com+markets+stocks+economy+fed+earnings+when:1d&hl=en-US&gl=US&ceid=US:en", tier: "fallback" },
 ];
 
-const TARGET_TOTAL = 120;
+const TARGET_TOTAL = 60; // keep the feed curated, not spammy
 const MAX_AGE_MS = 1000 * 60 * 60 * 24; // 24h — never show stale live articles
 const IDEAL_FRESH_AGE_MS = 1000 * 60 * 60 * 12; // strongest ranking boost for recent news
-const MIN_RELEVANCE = 30;
+const MIN_RELEVANCE = 45; // raised — only relevant news passes
+// Yahoo Finance carries a lot of low-signal/clickbait content, so it needs a higher bar
+const SOURCE_MIN_RELEVANCE: Partial<Record<NewsSource, number>> = {
+  "Yahoo Finance": 62,
+};
 const MIN_LIVE_ITEMS_BEFORE_SEED = 6;
 const NEWS_FETCH_CONCURRENCY = 6;
 const EMPTY_RETRY_DELAY_MS = 1000 * 45;
+
 
 // ============================================================================
 // AI helper
