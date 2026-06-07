@@ -457,13 +457,20 @@ function classifyArticle(raw: RawArticle, idx: number): NewsItem | null {
   if (ageMs < 1000 * 60 * 30 && impact === "high") status = "breaking";
   else if (ageMs < 1000 * 60 * 120 && impact !== "low") status = "developing";
 
-  // Relevance score — boosted for geopolitical + multi-theme
+  // Relevance score — boosted for geopolitical + multi-theme + strong signals
   const impactScore = impact === "high" ? 80 : impact === "medium" ? 55 : 30;
   const themeBonus = Math.min(themes.length * 5, 20);
   const triggerBonus = Math.min(highHits * 4, 15);
+  const strongBonus = Math.min(strongHits * 4, 16);
   const geoBonus = isGeopolitical ? 10 : 0;
   const sourceBonus = (raw.source === "Reuters" || raw.source === "Bloomberg" || raw.source === "Investing.com") ? 10 : 0;
-  const relevanceScore = Math.min(100, impactScore + themeBonus + triggerBonus + geoBonus + sourceBonus);
+  // Penalize thin/weak items that only matched a single keyword and have no real signal
+  const thinPenalty = strongHits <= 1 && highHits === 0 && themes.length < 2 ? 18 : 0;
+  const relevanceScore = Math.max(
+    0,
+    Math.min(100, impactScore + themeBonus + triggerBonus + strongBonus + geoBonus + sourceBonus - thinPenalty),
+  );
+
 
   // Published date
   const publishedAt = new Date(publishedTime).toISOString();
