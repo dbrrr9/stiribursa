@@ -67,7 +67,7 @@ function CalendarPage() {
             Calendarul <span className="text-teal">Catalizatorilor</span>
           </h1>
           <p className="text-muted-foreground text-sm">
-            Evenimente programate care pot mișca piețele — earnings, date economice, decizii ale băncilor centrale, evenimente geopolitice.
+            Catalizatorii următoarelor ~30 de zile — earnings majore, date economice (CPI, PCE, NFP, GDP), decizii ale băncilor centrale, evenimente geopolitice și IPO-uri importante, fiecare cu explicații despre impactul potențial asupra piețelor.
           </p>
         </div>
 
