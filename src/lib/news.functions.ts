@@ -1003,6 +1003,9 @@ export interface CatalystEvent {
   time?: string;
   title: string;
   description: string;
+  whyItMatters?: string; // explicație mai detaliată a impactului potențial
+  expectation?: string; // consens / estimare / valoare anterioară
+  tickers?: string[]; // simboluri relevante
   impact: ImpactLevel;
   category: "earnings" | "economic" | "central-bank" | "geopolitical" | "ipo" | "other";
   regions: MarketRegion[];
@@ -1020,13 +1023,16 @@ const CATALYST_SCHEMA = {
           date: { type: "string", description: "YYYY-MM-DD" },
           time: { type: "string", description: "HH:MM ET sau 'TBD'" },
           title: { type: "string" },
-          description: { type: "string", description: "1-2 propoziții despre ce înseamnă evenimentul." },
+          description: { type: "string", description: "2-3 propoziții clare despre ce este evenimentul și contextul lui." },
+          whyItMatters: { type: "string", description: "1-2 propoziții despre de ce contează pentru piețe și ce scenarii pot apărea (bull/bear)." },
+          expectation: { type: "string", description: "Consensul analiștilor, estimarea sau valoarea anterioară, dacă e relevant (ex: 'Consens: +0.3% MoM, anterior +0.2%'). Lasă gol dacă nu se aplică." },
+          tickers: { type: "array", items: { type: "string" }, description: "Simboluri/indici relevanți (ex: AAPL, SPX, EURUSD)." },
           impact: { type: "string", enum: ["high", "medium", "low"] },
           category: { type: "string", enum: ["earnings", "economic", "central-bank", "geopolitical", "ipo", "other"] },
           regions: { type: "array", items: { type: "string" } },
           affectedMarkets: { type: "array", items: { type: "string" } },
         },
-        required: ["date", "title", "description", "impact", "category", "regions", "affectedMarkets"],
+        required: ["date", "title", "description", "whyItMatters", "impact", "category", "regions", "affectedMarkets"],
       },
     },
   },
@@ -1050,18 +1056,28 @@ export const getCatalystCalendar = createServerFn({ method: "POST" })
   }
 
   const today = new Date();
-  const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const horizon = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-  const sys = `Ești un analist financiar care cunoaște calendarul economic și de earnings. Generează evenimente reale programate.`;
-  const usr = `Generează un calendar de catalizatori de piață pentru perioada ${today.toISOString().split("T")[0]} — ${nextWeek.toISOString().split("T")[0]}. Include: earnings majore (big tech, bănci), date economice (CPI, PPI, NFP, GDP, PMI, FOMC), evenimente geopolitice programate, IPO-uri. Doar evenimente reale și plauzibile. Descrierile în română.`;
+  const sys = `Ești un analist financiar senior care cunoaște în detaliu calendarul economic global, sezonul de earnings și pipeline-ul de IPO-uri. Generezi DOAR evenimente reale și plauzibile, programate. Scrii în română, clar și concis, fără să inventezi date precise dacă nu le știi (folosește 'TBD' pentru oră).`;
+  const usr = `Generează un calendar bogat de catalizatori de piață pentru perioada ${today.toISOString().split("T")[0]} — ${horizon.toISOString().split("T")[0]} (următoarele ~30 de zile).
+
+Cerințe:
+- Generează între 25 și 40 de evenimente, distribuite pe toată perioada (nu doar prima săptămână).
+- Include categoriile: earnings majore (big tech, bănci mari, companii cu pondere în indici), date economice (CPI, PPI, PCE, NFP/non-farm payrolls, GDP, PMI, retail sales, jobless claims, sentiment consumatori), decizii ale băncilor centrale (Fed/FOMC, BCE, BoE, BoJ), evenimente geopolitice programate (summit-uri, alegeri, decizii OPEC+), și IPO-uri importante / listări notabile.
+- Pentru fiecare eveniment: descriere de 2-3 propoziții (ce este + context), un câmp 'whyItMatters' cu impactul potențial asupra piețelor și scenarii (ce se întâmplă dacă rezultatul e peste/sub așteptări), iar unde se aplică un câmp 'expectation' cu consensul/estimarea/valoarea anterioară.
+- Adaugă 'tickers' cu simbolurile sau indicii relevanți.
+- Acordă atenție specială IPO-urilor importante și listărilor majore.
+- Sortează implicit cronologic. Doar evenimente reale și credibile.`;
 
   try {
     const result = await callAI(usr, sys, CATALYST_SCHEMA);
-    if (result?.events) {
-      const events: CatalystEvent[] = result.events.map((e: CatalystEvent, i: number) => ({
-        ...e,
-        id: `cat-${hashString(e.title)}-${i}`,
-      }));
+    if (result?.events?.length) {
+      const events: CatalystEvent[] = result.events
+        .map((e: CatalystEvent, i: number) => ({
+          ...e,
+          id: `cat-${hashString(e.title + e.date)}-${i}`,
+        }))
+        .sort((a, b) => a.date.localeCompare(b.date));
       catalystCache = { events, ts: Date.now() };
       return { events };
     }
@@ -1075,13 +1091,24 @@ export const getCatalystCalendar = createServerFn({ method: "POST" })
 function getStaticCatalysts(): CatalystEvent[] {
   const today = new Date();
   const fmt = (d: number) => new Date(today.getTime() + d * 86400000).toISOString().split("T")[0];
-  return [
-    { id: "cat-1", date: fmt(1), time: "14:30 ET", title: "CPI SUA (lunar)", description: "Indicele prețurilor de consum — indicator cheie pentru deciziile Fed.", impact: "high", category: "economic", regions: ["SUA"], affectedMarkets: ["Bonds", "Equities", "FX"] },
-    { id: "cat-2", date: fmt(2), time: "16:00 ET", title: "Decizia FOMC", description: "Reuniunea Fed cu potențial impact asupra ratelor dobânzii.", impact: "high", category: "central-bank", regions: ["SUA", "Global"], affectedMarkets: ["Bonds", "Equities", "FX", "Commodities"] },
-    { id: "cat-3", date: fmt(3), title: "Earnings: Apple, Microsoft", description: "Raportări trimestriale de la cele mai mari companii tech.", impact: "high", category: "earnings", regions: ["SUA"], affectedMarkets: ["Equities"] },
-    { id: "cat-4", date: fmt(4), time: "10:00 ET", title: "PMI Manufacturier Europa", description: "Indicator de activitate economică zona euro.", impact: "medium", category: "economic", regions: ["Europa"], affectedMarkets: ["Equities", "FX"] },
-    { id: "cat-5", date: fmt(5), time: "08:30 ET", title: "Jobless Claims SUA", description: "Cereri săptămânale de șomaj — puls pe piața muncii.", impact: "medium", category: "economic", regions: ["SUA"], affectedMarkets: ["Equities", "Bonds"] },
+  const raw: Omit<CatalystEvent, "id">[] = [
+    { date: fmt(1), time: "08:30 ET", title: "CPI SUA (lunar)", description: "Indicele prețurilor de consum măsoară inflația la nivelul consumatorilor. Este unul dintre cei mai urmăriți indicatori macro din SUA.", whyItMatters: "Determină direct așteptările privind politica monetară a Fed. O cifră peste consens crește randamentele și presează acțiunile; o cifră sub consens susține rallyul.", expectation: "Consens: +0.3% MoM / ~3.2% YoY", tickers: ["SPX", "US10Y", "DXY"], impact: "high", category: "economic", regions: ["SUA"], affectedMarkets: ["Bonds", "Equities", "FX"] },
+    { date: fmt(2), time: "08:30 ET", title: "Jobless Claims (săptămânal)", description: "Cererile inițiale de ajutor de șomaj oferă un puls săptămânal asupra pieței muncii din SUA.", whyItMatters: "O creștere bruscă semnalează slăbiciune economică și poate accelera așteptările de tăieri de dobândă.", expectation: "Consens: ~220k", tickers: ["SPX", "US2Y"], impact: "medium", category: "economic", regions: ["SUA"], affectedMarkets: ["Equities", "Bonds"] },
+    { date: fmt(3), title: "Earnings: Apple & Microsoft", description: "Raportările trimestriale de la cele mai mari companii din lume după capitalizare. Investitorii urmăresc creșterea veniturilor din servicii, cloud și ghidajul AI.", whyItMatters: "Cu pondere mare în S&P 500 și Nasdaq, mișcările lor pot dicta direcția întregii piețe. Ghidajul slab poate declanșa rotație din tech.", tickers: ["AAPL", "MSFT", "NDX"], impact: "high", category: "earnings", regions: ["SUA"], affectedMarkets: ["Equities"] },
+    { date: fmt(5), time: "14:00 ET", title: "Decizia FOMC + conferință de presă", description: "Reuniunea Comitetului de politică monetară al Fed, urmată de conferința de presă a președintelui. Se anunță decizia privind rata dobânzii și se actualizează proiecțiile.", whyItMatters: "Cel mai important catalizator macro. Tonul (hawkish/dovish) și dot-plot-ul mișcă toate clasele de active simultan.", expectation: "Piața așteaptă menținerea ratei; focus pe tonul comunicării", tickers: ["SPX", "US10Y", "DXY", "GC"], impact: "high", category: "central-bank", regions: ["SUA", "Global"], affectedMarkets: ["Bonds", "Equities", "FX", "Commodities"] },
+    { date: fmt(7), time: "08:30 ET", title: "Non-Farm Payrolls (NFP)", description: "Raportul oficial privind locurile de muncă din SUA (exclusiv agricultură), inclusiv rata șomajului și creșterea salariilor.", whyItMatters: "Indicator cheie al sănătății economice. Salariile peste așteptări pot readuce temerile inflaționiste și volatilitate pe randamente.", expectation: "Consens: ~180k locuri noi, șomaj ~4.1%", tickers: ["SPX", "DXY", "US10Y"], impact: "high", category: "economic", regions: ["SUA"], affectedMarkets: ["Equities", "Bonds", "FX"] },
+    { date: fmt(9), time: "TBD", title: "IPO notabil: listare tech majoră", description: "O companie de profil înalt din sectorul tehnologic urmează să se listeze. Listările mari testează apetitul pentru risc al pieței.", whyItMatters: "Un debut puternic semnalează deschiderea ferestrei IPO și apetit pentru creștere; un debut slab poate îngheța pipeline-ul de listări.", impact: "medium", category: "ipo", regions: ["SUA"], affectedMarkets: ["Equities"] },
+    { date: fmt(11), time: "07:45 ET", title: "Decizia de dobândă BCE", description: "Banca Centrală Europeană anunță decizia de politică monetară pentru zona euro, urmată de conferința de presă.", whyItMatters: "Influențează EUR și obligațiunile europene. Divergența față de Fed mișcă perechea EUR/USD.", tickers: ["EURUSD", "DAX", "DE10Y"], impact: "high", category: "central-bank", regions: ["Europa"], affectedMarkets: ["FX", "Bonds", "Equities"] },
+    { date: fmt(12), title: "Earnings: Bănci mari SUA", description: "JPMorgan, Bank of America și alte bănci majore deschid sezonul de raportări cu rezultate care reflectă starea economiei și a creditului.", whyItMatters: "Provizioanele pentru pierderi și venitul net din dobânzi oferă semnale despre sănătatea consumatorului și ciclul de credit.", tickers: ["JPM", "BAC", "XLF"], impact: "medium", category: "earnings", regions: ["SUA"], affectedMarkets: ["Equities"] },
+    { date: fmt(14), time: "04:30 ET", title: "PMI Manufacturier & Servicii Europa", description: "Indicii PMI flash măsoară activitatea economică în industrie și servicii în zona euro și Marea Britanie.", whyItMatters: "Un prim semnal lunar despre direcția economiei europene; sub 50 indică contracție.", expectation: "Prag critic: 50", tickers: ["EURUSD", "STOXX50"], impact: "medium", category: "economic", regions: ["Europa"], affectedMarkets: ["Equities", "FX"] },
+    { date: fmt(16), title: "Earnings: Nvidia", description: "Raportarea trimestrială a liderului în cipuri AI. Cel mai urmărit eveniment din sezonul de earnings tech.", whyItMatters: "Ghidajul privind cererea de cipuri AI poate mișca întreg sectorul de semiconductoare și sentimentul față de tema AI.", tickers: ["NVDA", "SOX", "NDX"], impact: "high", category: "earnings", regions: ["SUA"], affectedMarkets: ["Equities"] },
+    { date: fmt(18), time: "TBD", title: "Reuniune OPEC+", description: "Țările OPEC+ decid asupra nivelurilor de producție de petrol pentru perioada următoare.", whyItMatters: "Decizia privind cotele influențează direct prețul țițeiului și acțiunile din energie.", tickers: ["CL", "BRENT", "XLE"], impact: "medium", category: "geopolitical", regions: ["Global"], affectedMarkets: ["Commodities", "Equities"] },
+    { date: fmt(21), time: "TBD", title: "Decizia de dobândă BoJ", description: "Banca Japoniei anunță politica monetară. Atenție specială pe normalizarea politicii ultra-relaxate.", whyItMatters: "Modificările pot declanșa volatilitate pe yen și pe carry trade-uri globale.", tickers: ["USDJPY", "NKY"], impact: "medium", category: "central-bank", regions: ["Asia"], affectedMarkets: ["FX", "Equities"] },
+    { date: fmt(23), time: "08:30 ET", title: "GDP SUA (estimare)", description: "Prima estimare a produsului intern brut pentru trimestrul curent — măsura cuprinzătoare a activității economice.", whyItMatters: "Confirmă sau infirmă scenariul de soft landing. Surprizele mari mișcă randamentele și dolarul.", expectation: "Consens: ~2.0% anualizat", tickers: ["SPX", "DXY"], impact: "high", category: "economic", regions: ["SUA"], affectedMarkets: ["Equities", "Bonds", "FX"] },
+    { date: fmt(26), time: "TBD", title: "IPO notabil: listare în energie/industrial", description: "O companie importantă din sectorul industrial sau energetic urmează să se listeze pe bursă.", whyItMatters: "Evaluarea de listare oferă un reper pentru apetitul investitorilor față de active ciclice.", impact: "low", category: "ipo", regions: ["Global"], affectedMarkets: ["Equities"] },
+    { date: fmt(28), time: "08:30 ET", title: "PCE Core (inflația preferată de Fed)", description: "Indicele cheltuielilor de consum personal, exclusiv alimente și energie — măsura de inflație preferată de Fed.", whyItMatters: "Mai relevant decât CPI pentru deciziile Fed. O cifră fierbinte poate amâna așteptările de relaxare monetară.", expectation: "Consens: +0.2% MoM", tickers: ["SPX", "US10Y", "DXY"], impact: "high", category: "economic", regions: ["SUA"], affectedMarkets: ["Bonds", "Equities", "FX"] },
   ];
+  return raw.map((e, i) => ({ ...e, id: `cat-static-${i}` }));
 }
 
 // ============================================================================
