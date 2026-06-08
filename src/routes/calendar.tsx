@@ -67,7 +67,7 @@ function CalendarPage() {
             Calendarul <span className="text-teal">Catalizatorilor</span>
           </h1>
           <p className="text-muted-foreground text-sm">
-            Evenimente programate care pot mișca piețele — earnings, date economice, decizii ale băncilor centrale, evenimente geopolitice.
+            Catalizatorii următoarelor ~30 de zile — earnings majore, date economice (CPI, PCE, NFP, GDP), decizii ale băncilor centrale, evenimente geopolitice și IPO-uri importante, fiecare cu explicații despre impactul potențial asupra piețelor.
           </p>
         </div>
 
@@ -124,7 +124,24 @@ function CalendarPage() {
                       </div>
                       <h3 className="text-sm font-semibold text-foreground mb-0.5">{ev.title}</h3>
                       <p className="text-xs text-muted-foreground leading-relaxed">{ev.description}</p>
+
+                      {ev.whyItMatters && (
+                        <div className="mt-2 rounded-md border border-border/60 bg-muted/30 px-3 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-teal mb-0.5">De ce contează</p>
+                          <p className="text-xs text-foreground/80 leading-relaxed">{ev.whyItMatters}</p>
+                        </div>
+                      )}
+
+                      {ev.expectation && (
+                        <p className="text-[11px] text-muted-foreground mt-1.5">
+                          <span className="font-medium text-foreground/70">Așteptări:</span> {ev.expectation}
+                        </p>
+                      )}
+
                       <div className="flex flex-wrap gap-1 mt-2">
+                        {ev.tickers?.map((t) => (
+                          <span key={t} className="ms-chip font-mono text-navy bg-navy/8">{t}</span>
+                        ))}
                         {ev.regions.map((r) => (
                           <span key={r} className="ms-chip text-navy/70 bg-navy/5">{r}</span>
                         ))}
