@@ -1077,7 +1077,7 @@ Cerințe:
           ...e,
           id: `cat-${hashString(e.title + e.date)}-${i}`,
         }))
-        .sort((a, b) => a.date.localeCompare(b.date));
+        .sort((a: CatalystEvent, b: CatalystEvent) => a.date.localeCompare(b.date));
       catalystCache = { events, ts: Date.now() };
       return { events };
     }
