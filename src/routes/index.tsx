@@ -9,6 +9,7 @@ import { FilterBar, type FilterState, type SortMode } from "@/components/termina
 import { NewsCard, NewsCardSkeleton } from "@/components/terminal/news-card";
 import { fetchLatestNews } from "@/lib/news.functions";
 import { CustomAnalyzer } from "@/components/terminal/custom-analyzer";
+import { PromoBanner } from "@/components/terminal/promo-banner";
 import { Zap, TrendingUp, BarChart3, Newspaper, CalendarDays, ArrowRight } from "lucide-react";
 import type { NewsSource, ThemeTag, ImpactLevel, NewsItem } from "@/lib/news-types";
 
