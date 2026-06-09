@@ -9,6 +9,7 @@ import { FilterBar, type FilterState, type SortMode } from "@/components/termina
 import { NewsCard, NewsCardSkeleton } from "@/components/terminal/news-card";
 import { fetchLatestNews } from "@/lib/news.functions";
 import { CustomAnalyzer } from "@/components/terminal/custom-analyzer";
+import { PromoBanner } from "@/components/terminal/promo-banner";
 import { Zap, TrendingUp, BarChart3, Newspaper, CalendarDays, ArrowRight } from "lucide-react";
 import type { NewsSource, ThemeTag, ImpactLevel, NewsItem } from "@/lib/news-types";
 
@@ -115,6 +116,9 @@ function HomePage() {
             Fiecare știre devine o analiză clară: ce s-a întâmplat, de ce contează, ce impact are.
           </p>
         </section>
+
+        {/* PROMO — InvestorHood curs gratuit */}
+        {!hasActiveFilters && <PromoBanner />}
 
         {/* QUICK ACCESS — Phase 3 features */}
         {!hasActiveFilters && (
