@@ -168,9 +168,6 @@ function HomePage() {
           </SectionBlock>
         )}
 
-        {/* PROMO — InvestorHood curs gratuit */}
-        {!hasActiveFilters && <PromoBanner />}
-
         {/* CUSTOM AI ANALYZER */}
         <CustomAnalyzer />
 
