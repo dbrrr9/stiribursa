@@ -117,6 +117,9 @@ function HomePage() {
           </p>
         </section>
 
+        {/* PROMO — InvestorHood curs gratuit */}
+        {!hasActiveFilters && <PromoBanner />}
+
         {/* QUICK ACCESS — Phase 3 features */}
         {!hasActiveFilters && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 fade-up">
