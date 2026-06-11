@@ -40,7 +40,8 @@ function AlertsPage() {
   useEffect(() => {
     if (!user) { setLoading(false); return; }
     supabase.from("alerts").select("*").eq("user_id", user.id).order("created_at", { ascending: false })
-      .then(({ data }) => { setAlerts((data as Alert[]) || []); setLoading(false); });
+      .then(({ data }) => { setAlerts((data as Alert[]) || []); setLoading(false); })
+      .catch((e) => { console.error(e); setLoading(false); });
   }, [user]);
 
   const handleAdd = async () => {

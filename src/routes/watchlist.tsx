@@ -35,7 +35,8 @@ function WatchlistPage() {
   useEffect(() => {
     if (!user) { setLoading(false); return; }
     supabase.from("watchlist").select("*").eq("user_id", user.id).order("created_at", { ascending: false })
-      .then(({ data }) => { setItems((data as WatchlistItem[]) || []); setLoading(false); });
+      .then(({ data }) => { setItems((data as WatchlistItem[]) || []); setLoading(false); })
+      .catch((e) => { console.error(e); setLoading(false); });
   }, [user]);
 
   const handleAdd = async () => {

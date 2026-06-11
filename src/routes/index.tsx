@@ -7,10 +7,12 @@ import { TerminalHeader } from "@/components/terminal/header";
 import { TickerBar } from "@/components/terminal/ticker-bar";
 import { FilterBar, type FilterState, type SortMode } from "@/components/terminal/filter-bar";
 import { NewsCard, NewsCardSkeleton } from "@/components/terminal/news-card";
-import { fetchLatestNews } from "@/lib/news.functions";
+import { fetchLatestNews, getDailyBrief } from "@/lib/news.functions";
 import { CustomAnalyzer } from "@/components/terminal/custom-analyzer";
 import { PromoBanner } from "@/components/terminal/promo-banner";
-import { Zap, TrendingUp, BarChart3, Newspaper, CalendarDays, ArrowRight } from "lucide-react";
+import { Zap, TrendingUp, BarChart3, Newspaper, CalendarDays, ArrowRight, Clock } from "lucide-react";
+import { SourceBadge, StatusBadge, SentimentBadge, ImpactBadge } from "@/components/terminal/badges";
+import { timeAgo } from "@/components/terminal/clock";
 import type { NewsSource, ThemeTag, ImpactLevel, NewsItem } from "@/lib/news-types";
 
 const searchSchema = z.object({
@@ -59,6 +61,13 @@ function HomePage() {
     refetchOnWindowFocus: false,
   });
 
+  const { data: briefData } = useQuery({
+    queryKey: ["daily-brief-heatmap"],
+    queryFn: () => getDailyBrief(),
+    staleTime: 1000 * 60 * 60,
+    refetchOnWindowFocus: false,
+  });
+
   const items = data?.items ?? [];
 
   const filtered = useMemo(() => {
@@ -98,6 +107,7 @@ function HomePage() {
       <TickerBar items={items} />
 
       <main className="mx-auto max-w-7xl px-4 sm:px-6 py-6 sm:py-10 space-y-8">
+        
         {/* HERO */}
         <section className="fade-up">
           <div className="flex items-center gap-2 mb-2">
@@ -120,55 +130,11 @@ function HomePage() {
         {/* PROMO — InvestorHood curs gratuit */}
         {!hasActiveFilters && <PromoBanner />}
 
-        {/* QUICK ACCESS — Phase 3 features */}
-        {!hasActiveFilters && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 fade-up">
-            <Link to="/brief" className="ms-card p-4 flex items-center gap-3 group hover:border-teal/30">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal/10 text-teal">
-                <Newspaper className="h-4 w-4" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-semibold text-foreground group-hover:text-teal transition-colors">Daily Brief</div>
-                <div className="text-xs text-muted-foreground">Rezumatul zilnic AI al piețelor</div>
-              </div>
-              <ArrowRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-teal transition-colors" />
-            </Link>
-            <Link to="/calendar" className="ms-card p-4 flex items-center gap-3 group hover:border-teal/30">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-navy/10 text-navy">
-                <CalendarDays className="h-4 w-4" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-semibold text-foreground group-hover:text-teal transition-colors">Catalyst Calendar</div>
-                <div className="text-xs text-muted-foreground">Evenimente care mișcă piețele</div>
-              </div>
-              <ArrowRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-teal transition-colors" />
-            </Link>
-          </div>
-        )}
-
-
-        {!hasActiveFilters && !isLoading && topStories.length > 0 && (
-          <SectionBlock icon={<Zap className="h-3.5 w-3.5" />} title="Top Stories" subtitle="Cele mai importante știri acum">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {topStories.map((n, i) => (
-                <NewsCard key={n.id} item={n} index={i} featured={i === 0} />
-              ))}
-            </div>
-          </SectionBlock>
-        )}
-
-        {/* HIGH IMPACT NOW */}
-        {!hasActiveFilters && !isLoading && highImpact.length > 0 && (
-          <SectionBlock icon={<TrendingUp className="h-3.5 w-3.5" />} title="High Impact" subtitle="Știri cu impact ridicat asupra piețelor">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {highImpact.map((n, i) => (
-                <NewsCard key={n.id} item={n} index={i} />
-              ))}
-            </div>
-          </SectionBlock>
-        )}
-
-        {/* CUSTOM AI ANALYZER */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          {/* LEFT COLUMN - MAIN FEED (70%) */}
+          <div className="lg:col-span-8 space-y-8">
+            
+            {/* CUSTOM AI ANALYZER */}
         <CustomAnalyzer />
 
         {/* FILTERS */}
@@ -191,7 +157,7 @@ function HomePage() {
           </div>
 
           {isLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {Array.from({ length: 6 }).map((_, i) => (
                 <NewsCardSkeleton key={i} />
               ))}
@@ -199,13 +165,119 @@ function HomePage() {
           ) : filtered.length === 0 ? (
             <EmptyState onReset={() => setFilter({ q: "", sources: [], themes: [], impacts: [], sort: filterState.sort })} />
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {filtered.map((n, i) => (
-                <NewsCard key={n.id} item={n} index={i} />
+                <NewsCard key={n.id} item={n} index={i} featured={i === 0 || (n.impact === "high" && i < 3)} />
               ))}
             </div>
           )}
         </section>
+      </div>
+
+      {/* RIGHT COLUMN - STICKY SIDEBAR (30%) */}
+      <div className="lg:col-span-4">
+        <div className="sticky top-6 space-y-6">
+          
+          {/* QUICK ACCESS */}
+          {!hasActiveFilters && (
+            <div className="grid grid-cols-1 gap-3 fade-up">
+              <Link to="/brief" className="ms-card p-4 flex items-center gap-3 group hover:border-teal/40 hover:shadow-[0_0_20px_-12px_rgba(20,184,166,0.3)] transition-all">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal/10 text-teal">
+                  <Newspaper className="h-4 w-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-foreground group-hover:text-teal transition-colors">Daily Brief</div>
+                  <div className="text-xs text-muted-foreground">Rezumatul zilnic AI al piețelor</div>
+                </div>
+                <ArrowRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-teal transition-colors" />
+              </Link>
+              <Link to="/calendar" className="ms-card p-4 flex items-center gap-3 group hover:border-navy/40 hover:shadow-[0_0_20px_-12px_rgba(100,116,139,0.3)] transition-all">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-navy/10 text-navy">
+                  <CalendarDays className="h-4 w-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-foreground group-hover:text-navy transition-colors">Catalyst Calendar</div>
+                  <div className="text-xs text-muted-foreground">Evenimente care mișcă piețele</div>
+                </div>
+                <ArrowRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-navy transition-colors" />
+              </Link>
+            </div>
+          )}
+
+          {/* SENTIMENT HEATMAP (VERTICAL) */}
+          {!hasActiveFilters && briefData?.brief?.sectorHeatmap && (
+            <section className="fade-up ms-card p-4">
+              <div className="flex items-center gap-2 mb-4">
+                <BarChart3 className="h-4 w-4 text-teal" />
+                <h2 className="text-sm font-semibold text-foreground">Market Heatmap</h2>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {briefData.brief.sectorHeatmap.map((s, i) => {
+                  const isBull = s.sentiment === "bullish";
+                  const isBear = s.sentiment === "bearish";
+                  return (
+                    <div key={i} className={`flex flex-col p-2.5 rounded-lg border transition-all ${
+                      isBull ? "bg-sentiment-positive/10 border-sentiment-positive/20" : 
+                      isBear ? "bg-impact-high/10 border-impact-high/20" : 
+                      "bg-muted border-border"
+                    }`}>
+                      <span className="text-xs font-semibold text-foreground mb-1">{s.sector}</span>
+                      <div className="flex items-center justify-between mt-auto">
+                        <span className={`text-[9px] font-bold uppercase ${
+                          isBull ? "text-sentiment-positive" : isBear ? "text-impact-high" : "text-muted-foreground"
+                        }`}>
+                          {s.sentiment}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {/* TOP STORIES WIDGET */}
+          {!hasActiveFilters && !isLoading && topStories.length > 0 && (
+            <SectionBlock icon={<Zap className="h-3.5 w-3.5" />} title="Top Stories" subtitle="Live Feed">
+              <div className="flex flex-col gap-3">
+                {topStories.slice(0, 5).map((n) => {
+                  const isBull = n.sentiment === "positive";
+                  const isBear = n.sentiment === "negative";
+                  return (
+                    <Link key={n.id} to="/article/$id" params={{ id: n.id }} className="group ms-card p-3 flex flex-col gap-2 hover:border-teal/30 hover:shadow-sm transition-all relative overflow-hidden">
+                      {n.status === "breaking" && (
+                        <div className="absolute top-0 left-0 w-1 h-full bg-impact-high" />
+                      )}
+                      
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <SourceBadge source={n.source} />
+                          {n.status === "breaking" && <StatusBadge status="breaking" />}
+                        </div>
+                        <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                          <Clock className="h-2.5 w-2.5" />
+                          {timeAgo(n.publishedAt)}
+                        </span>
+                      </div>
+                      
+                      <h4 className="text-sm font-semibold text-foreground group-hover:text-teal transition-colors leading-snug line-clamp-3">
+                        {n.title}
+                      </h4>
+                      
+                      <div className="flex items-center justify-between mt-1">
+                        <SentimentBadge sentiment={n.sentiment} />
+                        <ImpactBadge impact={n.impact} />
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </SectionBlock>
+          )}
+        </div>
+      </div>
+      
+      </div>
 
         <footer className="pt-8 pb-4 text-center text-[11px] text-muted-foreground">
           MarketScope v2.0 · Reuters · Bloomberg · Investing.com · CNBC · MarketWatch · Yahoo Finance · Explicații AI în română

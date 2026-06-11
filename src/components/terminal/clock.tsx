@@ -16,18 +16,26 @@ export function LiveClock() {
   if (!now) {
     return (
       <span className="text-xs text-muted-foreground tabular-nums">
-        --:--:-- UTC
+        --:--:-- RO
       </span>
     );
   }
 
-  const hh = pad(now.getUTCHours());
-  const mm = pad(now.getUTCMinutes());
-  const ss = pad(now.getUTCSeconds());
+  const parts = new Intl.DateTimeFormat("ro-RO", {
+    timeZone: "Europe/Bucharest",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  }).formatToParts(now);
+
+  const hh = parts.find(p => p.type === "hour")?.value || "00";
+  const mm = parts.find(p => p.type === "minute")?.value || "00";
+  const ss = parts.find(p => p.type === "second")?.value || "00";
 
   return (
     <span className="text-xs tabular-nums text-muted-foreground">
-      {hh}:{mm}:<span className="text-foreground font-medium">{ss}</span> <span className="text-muted-foreground/60">UTC</span>
+      {hh}:{mm}:<span className="text-foreground font-medium">{ss}</span> <span className="text-muted-foreground/60">RO</span>
     </span>
   );
 }
@@ -59,5 +67,7 @@ export function timeAgo(iso?: string | null): string {
 export function formatTimestamp(iso?: string | null): string {
   const d = safeDate(iso);
   if (!d) return "Dată indisponibilă";
-  return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())} UTC · ${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}`;
+  const time = new Intl.DateTimeFormat("ro-RO", { timeZone: "Europe/Bucharest", hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
+  const date = new Intl.DateTimeFormat("ro-RO", { timeZone: "Europe/Bucharest", day: "2-digit", month: "2-digit" }).format(d);
+  return `${time} RO · ${date}`;
 }

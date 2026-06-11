@@ -1,10 +1,13 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { ArrowLeft, ExternalLink, AlertCircle, Clock, TrendingUp } from "lucide-react";
+import { ArrowLeft, ExternalLink, AlertCircle, Clock, TrendingUp, Share } from "lucide-react";
+import { toPng } from "html-to-image";
 import { TerminalHeader } from "@/components/terminal/header";
 import { NewsCard } from "@/components/terminal/news-card";
+import { TradingViewChart } from "@/components/terminal/tradingview-chart";
+import { ShareCard } from "@/components/terminal/share-card";
 import { ImpactBadge, SentimentBadge, SourceBadge, StatusBadge, RelevanceBar, ScoreBadge } from "@/components/terminal/badges";
 import { formatTimestamp, timeAgo } from "@/components/terminal/clock";
 import { THEME_LABELS, type NewsItem, type ThemeTag, type MarketRegion } from "@/lib/news-types";
@@ -28,7 +31,7 @@ export const Route = createFileRoute("/article/$id")({
     return (
       <div className="min-h-screen bg-background">
         <TerminalHeader />
-        <main className="mx-auto max-w-3xl px-4 py-12 text-center">
+        <main className="mx-auto max-w-4xl px-4 py-12 text-center">
           <div className="ms-card p-8">
             <AlertCircle className="h-8 w-8 text-impact-high mx-auto mb-3" />
             <h1 className="text-lg font-semibold mb-2">Eroare</h1>
@@ -47,7 +50,7 @@ export const Route = createFileRoute("/article/$id")({
   notFoundComponent: () => (
     <div className="min-h-screen bg-background">
       <TerminalHeader />
-      <main className="mx-auto max-w-3xl px-4 py-12 text-center">
+      <main className="mx-auto max-w-4xl px-4 py-12 text-center">
         <div className="ms-card p-8">
           <h1 className="text-lg font-semibold mb-2">Articol negăsit</h1>
           <Link to="/" className="text-sm font-medium text-teal hover:underline">← Înapoi la feed</Link>
@@ -74,7 +77,7 @@ function ArticlePage() {
     return (
       <div className="min-h-screen bg-background">
         <TerminalHeader />
-        <main className="mx-auto max-w-3xl px-4 py-12 text-center">
+        <main className="mx-auto max-w-4xl px-4 py-12 text-center">
           <div className="ms-card p-8">
             <h1 className="text-lg font-semibold mb-2">Articol indisponibil</h1>
             <Link to="/" className="text-sm font-medium text-teal hover:underline">← Înapoi la feed</Link>
@@ -100,6 +103,35 @@ function ArticlePage() {
   const analysis = analysisData?.analysis;
   const analysisError = analysisData?.error;
   const scores = scoreData?.scores;
+
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [isSharing, setIsSharing] = useState(false);
+
+  const handleShare = async () => {
+    if (!cardRef.current || !analysis) return;
+    try {
+      setIsSharing(true);
+      const dataUrl = await toPng(cardRef.current, { cacheBust: true, pixelRatio: 2 });
+      const blob = await (await fetch(dataUrl)).blob();
+      const file = new File([blob], `marketscope-${item.id}.png`, { type: 'image/png' });
+      
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: `Analiză MarketScope: ${item.title}`,
+        });
+      } else {
+        const link = document.createElement('a');
+        link.download = `marketscope-${item.id}.png`;
+        link.href = dataUrl;
+        link.click();
+      }
+    } catch (e) {
+      console.error("Share error", e);
+    } finally {
+      setIsSharing(false);
+    }
+  };
 
   // Related stories logic
   const relatedStories = useMemo(() => {
@@ -129,7 +161,7 @@ function ArticlePage() {
     <div className="min-h-screen bg-background">
       <TerminalHeader />
 
-      <main className="mx-auto max-w-3xl px-4 sm:px-6 py-6 sm:py-10 space-y-6">
+      <main className="mx-auto max-w-4xl px-4 sm:px-6 py-6 sm:py-10 space-y-6">
         <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="h-3.5 w-3.5" /> Înapoi la feed
         </Link>
@@ -174,6 +206,15 @@ function ArticlePage() {
               {formatTimestamp(item.publishedAt)} · {timeAgo(item.publishedAt)}
             </div>
             <div className="flex items-center gap-4">
+              {analysis && (
+                <button 
+                  onClick={handleShare} 
+                  disabled={isSharing}
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-teal transition-colors disabled:opacity-50"
+                >
+                  <Share className="h-3.5 w-3.5" /> {isSharing ? "Generare..." : "Share Card"}
+                </button>
+              )}
               <RelevanceBar score={item.relevanceScore} />
               {item.url && (
                 <a href={item.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm font-medium text-teal hover:underline">
@@ -215,6 +256,12 @@ function ArticlePage() {
 
         {analysis && (
           <>
+            {analysis.tickers && analysis.tickers.length > 0 && (
+              <section className="fade-up mb-6">
+                <TradingViewChart symbol={analysis.tickers[0]} />
+              </section>
+            )}
+
             <Section index="01" title="Ce s-a întâmplat">
               <ProseBlock text={analysis.summarySimple} />
             </Section>
@@ -224,24 +271,30 @@ function ArticlePage() {
             </Section>
 
             <Section index="03" title="Ce piețe afectează">
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div className="rounded-lg border border-impact-medium/20 bg-impact-medium/[0.03] p-4">
-                  <div className="text-xs font-semibold text-impact-medium mb-2">Termen scurt</div>
-                  <p className="text-sm leading-relaxed text-foreground/80">{analysis.shortTermImpact}</p>
+              <div className="grid sm:grid-cols-2 gap-4 mb-5">
+                <div className="relative overflow-hidden rounded-xl border border-impact-medium/20 bg-gradient-to-br from-impact-medium/5 to-transparent p-5">
+                  <div className="absolute top-0 right-0 p-3 opacity-10">
+                    <TrendingUp className="h-10 w-10 text-impact-medium" />
+                  </div>
+                  <div className="text-xs font-bold uppercase tracking-wider text-impact-medium mb-3">Impact pe Termen Scurt</div>
+                  <p className="text-[15px] font-serif leading-relaxed text-foreground/90 relative z-10">{analysis.shortTermImpact}</p>
                 </div>
-                <div className="rounded-lg border border-teal/20 bg-teal/[0.03] p-4">
-                  <div className="text-xs font-semibold text-teal mb-2">Termen mediu</div>
-                  <p className="text-sm leading-relaxed text-foreground/80">{analysis.mediumTermImpact}</p>
+                <div className="relative overflow-hidden rounded-xl border border-teal/20 bg-gradient-to-br from-teal/5 to-transparent p-5">
+                  <div className="absolute top-0 right-0 p-3 opacity-10">
+                    <Clock className="h-10 w-10 text-teal" />
+                  </div>
+                  <div className="text-xs font-bold uppercase tracking-wider text-teal mb-3">Impact pe Termen Mediu</div>
+                  <p className="text-[15px] font-serif leading-relaxed text-foreground/90 relative z-10">{analysis.mediumTermImpact}</p>
                 </div>
               </div>
-              <div className="mt-4">
+              <div className="mt-2">
                 <ProseBlock text={analysis.affectedMarkets} />
               </div>
             </Section>
 
             <Section index="04" title="Ce ar trebui urmărit">
               <ul className="space-y-2.5">
-                {analysis.watchPoints.map((wp, i) => (
+                {(analysis.watchPoints || []).map((wp, i) => (
                   <li key={i} className="flex gap-3 text-sm leading-relaxed">
                     <span className="text-teal font-mono text-xs tabular-nums flex-shrink-0 mt-0.5">
                       {String(i + 1).padStart(2, "0")}
@@ -261,7 +314,7 @@ function ArticlePage() {
                 <span className="h-px flex-1 bg-navy/10" />
               </div>
               <ul className="space-y-2.5">
-                {analysis.bottomLine.map((b, i) => (
+                {(analysis.bottomLine || []).map((b, i) => (
                   <li key={i} className="flex gap-3 text-sm leading-relaxed">
                     <span className="text-teal flex-shrink-0 mt-0.5">•</span>
                     <span className="text-foreground">{b}</span>
@@ -286,6 +339,20 @@ function ArticlePage() {
               ))}
             </div>
           </section>
+        )}
+
+        {/* HIDDEN SHARE CARD */}
+        {analysis && (
+          <div className="fixed top-[-9999px] left-[-9999px] pointer-events-none">
+            <ShareCard
+              ref={cardRef}
+              title={item.title}
+              bottomLine={analysis.bottomLine?.[0] ?? analysis.summarySimple}
+              source={item.source}
+              sentiment={item.sentiment}
+              impact={item.impact}
+            />
+          </div>
         )}
 
         <footer className="pt-6 pb-4 text-center text-[11px] text-muted-foreground">
@@ -313,7 +380,7 @@ function ProseBlock({ text }: { text: string }) {
   return (
     <>
       {text.split(/\n\n+/).map((p, i) => (
-        <p key={i} className="text-sm leading-relaxed text-foreground/80">{p}</p>
+        <p key={i} className="text-[15px] font-serif leading-[1.75] text-foreground/90 mb-4 last:mb-0">{p}</p>
       ))}
     </>
   );

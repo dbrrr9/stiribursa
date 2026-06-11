@@ -1,7 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import YahooFinance from "yahoo-finance2";
+const yahooFinance = new YahooFinance();
 // Auth middleware removed from AI functions — client can't pass auth headers via server fn calls
 import { SEED_NEWS } from "./seed-news";
+import { supabaseAdmin } from "../integrations/supabase/client.server";
 import type {
   ImpactLevel,
   NewsItem,
@@ -11,10 +14,12 @@ import type {
   ThemeTag,
   MarketRegion,
   ArticleAnalysis,
+  DailyBrief,
 } from "./news-types";
 
-const AI_GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
-const AI_MODEL = "google/gemini-3-flash-preview";
+import OpenAI from "openai";
+
+const AI_MODEL = "gpt-4o-mini";
 
 // In-memory cache (per worker instance)
 let newsCache: { items: NewsItem[]; ts: number } | null = null;
@@ -60,24 +65,32 @@ function isUrlSafe(urlStr: string): { safe: boolean; error?: string } {
 }
 
 // ============================================================================
-// RATE LIMITER — in-memory, per user, for AI functions
+// RATE LIMITER & LOCKS — in-memory, for AI functions
 // ============================================================================
 const rateLimitMap = new Map<string, number[]>();
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
-const RATE_LIMIT_MAX = 10; // max 10 AI calls per minute
 
-function checkRateLimit(userId: string): boolean {
+// Prevent memory leak by periodically cleaning up old keys
+if (typeof setInterval !== "undefined") {
+  setInterval(() => rateLimitMap.clear(), 60_000 * 60);
+}
+
+function checkRateLimit(key: string, limit = 10): boolean {
   const now = Date.now();
-  const timestamps = rateLimitMap.get(userId) ?? [];
+  const timestamps = rateLimitMap.get(key) ?? [];
   const recent = timestamps.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
-  if (recent.length >= RATE_LIMIT_MAX) {
-    rateLimitMap.set(userId, recent);
+  if (recent.length >= limit) {
+    rateLimitMap.set(key, recent);
     return false;
   }
   recent.push(now);
-  rateLimitMap.set(userId, recent);
+  rateLimitMap.set(key, recent);
   return true;
 }
+
+let isGeneratingBrief = false;
+let isGeneratingCalendar = false;
+const aiLocks = new Set<string>();
 
 
 // ============================================================================
@@ -131,51 +144,36 @@ const EMPTY_RETRY_DELAY_MS = 1000 * 45;
 // AI helper
 // ============================================================================
 async function callAI(prompt: string, system: string, jsonSchema?: object) {
-  const key = process.env.LOVABLE_API_KEY;
-  if (!key) throw new Error("LOVABLE_API_KEY not configured");
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) throw new Error("OPENAI_API_KEY not configured");
 
-  const body: Record<string, unknown> = {
-    model: AI_MODEL,
-    messages: [
-      { role: "system", content: system },
-      { role: "user", content: prompt },
-    ],
-  };
+  const openai = new OpenAI({ apiKey: key });
+
+  const messages: any[] = [
+    { role: "system", content: system },
+    { role: "user", content: prompt }
+  ];
 
   if (jsonSchema) {
-    body.tools = [
-      {
-        type: "function",
-        function: {
-          name: "respond",
-          description: "Returns the structured answer.",
-          parameters: jsonSchema,
-        },
-      },
-    ];
-    body.tool_choice = { type: "function", function: { name: "respond" } };
+    messages[0].content += "\n\nCRITICAL: You MUST reply with ONLY a valid JSON object. Ensure you follow this exact JSON schema:\n" + JSON.stringify(jsonSchema);
   }
 
-  const r = await fetch(AI_GATEWAY, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
+  try {
+    const response = await openai.chat.completions.create({
+      model: AI_MODEL,
+      messages,
+      max_tokens: 10000,
+      response_format: jsonSchema ? { type: "json_object" } : undefined,
+    });
 
-  if (!r.ok) {
-    const txt = await r.text();
-    throw new Error(`AI gateway ${r.status}: ${txt.slice(0, 200)}`);
+    const content = response.choices[0].message.content;
+    if (jsonSchema) {
+      return content ? JSON.parse(content) : null;
+    }
+    return content ?? "";
+  } catch (e: any) {
+    throw new Error(`OpenAI API error: ${e.message}`);
   }
-
-  const data = await r.json();
-  if (jsonSchema) {
-    const args = data.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
-    return args ? JSON.parse(args) : null;
-  }
-  return data.choices?.[0]?.message?.content ?? "";
 }
 
 // ============================================================================
@@ -515,15 +513,45 @@ function hashString(s: string): string {
 // MAIN: fetch news from RSS feeds
 // ============================================================================
 export const fetchLatestNews = createServerFn({ method: "GET" }).handler(async () => {
-  if (newsCache && Date.now() - newsCache.ts < CACHE_TTL_MS) {
-    return { items: newsCache.items, cached: true, source: "cache" as const };
-  }
-
   try {
+    const { data: latestNews } = await supabaseAdmin
+      .from('news_items')
+      .select('created_at')
+      .order('created_at', { ascending: false })
+      .limit(1);
+      
+    const lastUpdateMs = latestNews?.[0]?.created_at ? new Date(latestNews[0].created_at).getTime() : 0;
+    
+    if (lastUpdateMs > 0 && Date.now() - lastUpdateMs < CACHE_TTL_MS) {
+      const { data: dbItems } = await supabaseAdmin
+        .from('news_items')
+        .select('*')
+        .order('published_at', { ascending: false })
+        .limit(TARGET_TOTAL);
+        
+      if (dbItems && dbItems.length > 0) {
+        const items: NewsItem[] = dbItems.map(item => ({
+          id: item.id,
+          title: item.title,
+          source: item.source as NewsSource,
+          url: item.url,
+          publishedAt: item.published_at,
+          summary: item.summary,
+          themes: item.themes as ThemeTag[],
+          impact: item.impact as ImpactLevel,
+          sentiment: item.sentiment as Sentiment,
+          status: item.status as NewsStatus,
+          regions: item.regions as MarketRegion[],
+          markets: item.markets,
+          relevanceScore: item.relevance_score,
+        }));
+        return { items, cached: true, source: "database" as const };
+      }
+    }
+
     const feedResults = await mapConcurrent(RSS_FEEDS, NEWS_FETCH_CONCURRENCY, fetchRSSFeed);
     const allRaw = feedResults.flat();
 
-    // Dedupe by title similarity
     const seen = new Set<string>();
     const deduped: RawArticle[] = [];
     for (const a of allRaw) {
@@ -541,22 +569,36 @@ export const fetchLatestNews = createServerFn({ method: "GET" }).handler(async (
       .filter((n) => now - new Date(n.publishedAt).getTime() <= MAX_AGE_MS)
       .filter((n) => n.relevanceScore >= (SOURCE_MIN_RELEVANCE[n.source] ?? MIN_RELEVANCE));
 
-
     if (classified.length >= 1) {
       classified.sort(
         (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
       );
 
       const items = classified.slice(0, TARGET_TOTAL);
-      newsCache = { items, ts: Date.now() };
+      
+      const itemsToInsert = items.map(n => ({
+        id: n.id,
+        title: n.title,
+        source: n.source,
+        url: n.url,
+        published_at: n.publishedAt,
+        summary: n.summary,
+        themes: n.themes,
+        impact: n.impact,
+        sentiment: n.sentiment,
+        status: n.status,
+        regions: n.regions,
+        markets: n.markets,
+        relevance_score: n.relevanceScore,
+      }));
+      
+      await supabaseAdmin.from('news_items').upsert(itemsToInsert, { onConflict: 'id' });
       return { items, cached: false, source: "live" as const };
     }
   } catch (e) {
     console.error("RSS aggregation failed:", e);
   }
 
-  // No live news at all — serve seed but cache briefly so the next request retries the feeds
-  newsCache = { items: SEED_NEWS, ts: Date.now() - (CACHE_TTL_MS - EMPTY_RETRY_DELAY_MS) };
   return { items: SEED_NEWS, cached: false, source: "seed" as const };
 });
 
@@ -595,6 +637,11 @@ const ANALYSIS_SCHEMA = {
       type: "array",
       items: { type: "string" },
       description: "4-6 bullets foarte scurte — esențialul și concluzia practică pentru un investitor.",
+    },
+    tickers: {
+      type: "array",
+      items: { type: "string" },
+      description: "0-5 simboluri financiare principale (tickere) implicate, în format standard (ex: NASDAQ:NVDA, NYSE:TSLA, FX:EURUSD, BINANCE:BTCUSDT). Dacă nu există un ticker clar, lasă gol.",
     },
   },
   required: [
@@ -641,29 +688,55 @@ function fallbackAnalysis(data: { title: string; source: string; summary: string
 export const analyzeArticle = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => analyzeArticleSchema.parse(data))
   .handler(async ({ data }): Promise<{ analysis: ArticleAnalysis | null; error?: string }> => {
-    const rlKey = `analyze-${data.id}`;
-    if (!checkRateLimit(rlKey)) {
-      return { analysis: null, error: "Prea multe cereri. Așteaptă un minut." };
+    // Check DB first
+    try {
+      const { data: dbAnalysis } = await supabaseAdmin
+        .from('news_analyses')
+        .select('*')
+        .eq('news_id', data.id)
+        .maybeSingle();
+        
+      if (dbAnalysis) {
+        return { 
+          analysis: {
+            summarySimple: dbAnalysis.summary_simple,
+            whyItMatters: dbAnalysis.why_it_matters,
+            shortTermImpact: dbAnalysis.short_term_impact,
+            mediumTermImpact: dbAnalysis.medium_term_impact,
+            affectedMarkets: dbAnalysis.affected_markets,
+            watchPoints: dbAnalysis.watch_points || [],
+            bottomLine: dbAnalysis.bottom_line || [],
+            tickers: dbAnalysis.tickers || []
+          }
+        };
+      }
+    } catch (e) {
+      console.error("Failed to fetch from DB", e);
     }
-    const cacheKey = data.id;
-    const cached = analysisCache.get(cacheKey);
-    if (cached) return { analysis: cached };
 
-    if (!process.env.LOVABLE_API_KEY) {
-      const fb = fallbackAnalysis(data);
-      analysisCache.set(cacheKey, fb);
-      return { analysis: fb };
+    if (!process.env.GROQ_API_KEY) {
+      return { analysis: fallbackAnalysis(data) };
     }
 
-    const sys = `Ești un analist financiar senior la o firmă de investment banking care explică știri de piață pentru investitori români. Scrii în limba română, clar, profesionist, fără clickbait. Produci analize COMPLEXE și BOGATE: legi știrea de mecanisme economice reale (rate de dobândă, lichiditate, cost al capitalului, flux de capital, prime de risc), menționezi companii/tickere, sectoare, niveluri de preț și procente concrete. Când apar termeni tehnici (yield, basis points, hawkish, dovish, FOMC, EBITDA, spread), îi explici scurt în paranteză. Oferi scenarii (bull/bear) cu probabilități calitative. Te concentrezi pe IMPACT REAL și transmisibil asupra pieței de capital.`;
+    if (aiLocks.has(data.id)) {
+      return { analysis: null, error: "Analiza este în curs de generare. Te rugăm să reîncarci pagina în 10 secunde." };
+    }
 
-    const usr = `Analizează în profunzime această știre și produ o explicație COMPLEXĂ pentru un investitor, cu accent pe modul în care poate influența piața de capital:
+    const rlKey = `analyze_ai_${data.id}`;
+    if (!checkRateLimit(rlKey, 3)) { 
+      return { analysis: null, error: "Prea multe cereri globale pentru acest articol. Așteaptă un minut." };
+    }
+
+    aiLocks.add(data.id);
+    const sys = `Ești un analist financiar senior la o firmă de investment banking care explică știri de piață pentru investitori români. Scrii în limba română, clar, profesionist, fără clickbait. Produci analize COMPLEXE și BOGATE: legi știrea de mecanisme economice reale, menționezi companii/tickere și sectoare. REGULĂ ABSOLUTĂ: ESTE STRICT INTERZIS SĂ INVENTEZI SAU SĂ PRECIZEZI PREȚURI NOMINALE EXACTE (ex: "Aurul a atins 1850$") PENTRU ORICE INSTRUMENT FINANCIAR, DECÂT DACĂ SUNT PREZENTE CLAR ÎN TEXTUL ȘTIRII. AI acces la date vechi, deci discuta doar în procente (%), puncte de bază (bps) sau tendințe direcționale (creștere/scădere). Explică termenii tehnici scurt. Oferă scenarii bull/bear.`;
+
+      const usr = `Analizează în profunzime această știre și produ o explicație COMPLEXĂ pentru un investitor, cu accent pe modul în care poate influența piața de capital:
 
 TITLU: ${data.title}
 SURSĂ: ${data.source}
 REZUMAT: ${data.summary}
 TEME: ${data.themes?.join(", ") ?? "n/a"}
-REGIUNI: ${data.regions?.join(", ") ?? "n/a"}
+ REGIUNI: ${data.regions?.join(", ") ?? "n/a"}
 
 Cerințe:
 - Fii specific și nuanțat; evită generalitățile. Folosește cifre, sectoare și instrumente concrete.
@@ -674,7 +747,22 @@ Generează o analiză completă urmând schema cerută.`;
     try {
       const result = (await callAI(usr, sys, ANALYSIS_SCHEMA)) as ArticleAnalysis | null;
       if (result) {
-        analysisCache.set(cacheKey, result);
+        // Insert to DB
+        try {
+          await supabaseAdmin.from('news_analyses').upsert({
+            news_id: data.id,
+            summary_simple: result.summarySimple,
+            why_it_matters: result.whyItMatters,
+            short_term_impact: result.shortTermImpact,
+            medium_term_impact: result.mediumTermImpact,
+            affected_markets: result.affectedMarkets,
+            watch_points: result.watchPoints,
+            bottom_line: result.bottomLine,
+            tickers: result.tickers ?? []
+          });
+        } catch(dbErr) {
+          console.error("Failed to insert analysis", dbErr);
+        }
         return { analysis: result };
       }
       return { analysis: fallbackAnalysis(data) };
@@ -684,27 +772,45 @@ Generează o analiză completă urmând schema cerută.`;
       if (msg.includes("429")) return { analysis: fallbackAnalysis(data), error: "Prea multe cereri AI." };
       if (msg.includes("402")) return { analysis: fallbackAnalysis(data), error: "Credite AI epuizate." };
       return { analysis: fallbackAnalysis(data) };
+    } finally {
+      aiLocks.delete(data.id);
     }
   });
 
 export const getNewsItem = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => z.object({ id: z.string().min(1).max(128) }).parse(data))
   .handler(async ({ data }) => {
-    // If cache is empty, fetch news first to populate it
-    if (!newsCache) {
-      try {
-        await fetchLatestNews();
-      } catch (e) {
-        console.error("getNewsItem: failed to populate cache", e);
+    try {
+      const { data: dbItem } = await supabaseAdmin
+        .from('news_items')
+        .select('*')
+        .eq('id', data.id)
+        .maybeSingle();
+        
+      if (dbItem) {
+        const item: NewsItem = {
+          id: dbItem.id,
+          title: dbItem.title,
+          source: dbItem.source as NewsSource,
+          url: dbItem.url,
+          publishedAt: dbItem.published_at,
+          summary: dbItem.summary,
+          themes: dbItem.themes as ThemeTag[],
+          impact: dbItem.impact as ImpactLevel,
+          sentiment: dbItem.sentiment as Sentiment,
+          status: dbItem.status as NewsStatus,
+          regions: dbItem.regions as MarketRegion[],
+          markets: dbItem.markets,
+          relevanceScore: dbItem.relevance_score,
+        };
+        return { item };
       }
+    } catch(e) {
+      console.error("Failed to get news item from DB", e);
     }
-    const all = newsCache?.items ?? SEED_NEWS;
-    const item = all.find((n) => n.id === data.id);
-    if (!item) {
-      const seed = SEED_NEWS.find((n) => n.id === data.id);
-      return { item: seed ?? null };
-    }
-    return { item };
+    
+    const seed = SEED_NEWS.find((n) => n.id === data.id);
+    return { item: seed ?? null };
   });
 
 // ============================================================================
@@ -725,9 +831,9 @@ export const analyzeCustomNews = createServerFn({ method: "POST" })
       sourceLabel: string;
       error?: string;
     }> => {
-      const rlKey = `custom-${Date.now()}`;
-      if (!checkRateLimit(rlKey)) {
-        return { analysis: null, title: "", sourceLabel: "", error: "Prea multe cereri. Așteaptă un minut." };
+      const rlKey = `custom_news_global`;
+      if (!checkRateLimit(rlKey, 15)) {
+        return { analysis: null, title: "", sourceLabel: "", error: "Prea multe cereri globale. Așteaptă un minut." };
       }
 
       const raw = data.input.trim();
@@ -764,7 +870,12 @@ export const analyzeCustomNews = createServerFn({ method: "POST" })
               redirect: "manual",
             });
             if (!r.ok) return null;
-            return await r.text();
+            const cl = r.headers.get("content-length");
+            if (cl && parseInt(cl, 10) > 1024 * 1024 * 2) {
+              return null; // Ignore if too large
+            }
+            const text = await r.text();
+            return text.slice(0, 1024 * 1024 * 2); // Max 2MB
           } catch {
             return null;
           }
@@ -778,8 +889,15 @@ export const analyzeCustomNews = createServerFn({ method: "POST" })
               signal: AbortSignal.timeout(12000),
             });
             if (!r.ok) return null;
+            const cl = r.headers.get("content-length");
+            if (cl && parseInt(cl, 10) > 1024 * 1024 * 2) {
+              return null; // Ignore if too large
+            }
             const md = await r.text();
-            return md && md.length > 100 ? md : null;
+            if (md && md.length > 100) {
+              return md.slice(0, 1024 * 1024 * 2);
+            }
+            return null;
           } catch {
             return null;
           }
@@ -821,10 +939,12 @@ export const analyzeCustomNews = createServerFn({ method: "POST" })
         if (firstLine.length > 8 && firstLine.length < 200) title = firstLine;
       }
 
-      if (!process.env.LOVABLE_API_KEY) {
+      if (!process.env.OPENAI_API_KEY) {
         return {
-          analysis: fallbackAnalysis({ title, source: sourceLabel, summary: bodyText.slice(0, 300) }),
-          title, sourceLabel, error: "AI-ul nu este configurat.",
+          analysis: fallbackAnalysis({ title, source: sourceLabel, summary: "Rezumat generic." }),
+          title,
+          sourceLabel,
+          error: "Cheia OpenAI lipsește.",
         };
       }
 
@@ -850,147 +970,220 @@ export const analyzeCustomNews = createServerFn({ method: "POST" })
 // ============================================================================
 export interface DailyBrief {
   date: string;
-  marketOverview: string;
-  topThemes: { theme: string; summary: string; sentiment: Sentiment }[];
-  keyEvents: { time: string; event: string; impact: ImpactLevel }[];
-  sectorPerformance: { sector: string; direction: "up" | "down" | "flat"; detail: string }[];
-  commodities: { name: string; direction: "up" | "down" | "flat"; detail: string }[];
-  techHighlights: { company: string; detail: string; sentiment: Sentiment }[];
-  geopoliticalUpdate: string;
-  outlook: string;
   generatedAt: string;
+  headline: string;
+  snapshot: {
+    bullets: string[];
+    indices: { name: string; change: string; value: string }[];
+    fx: { name: string; change: string; value: string }[];
+    rates: { name: string; value: string }[];
+    commodities: { name: string; change: string; value: string }[];
+  };
+  macroSentiment: { markdown: string };
+  equities: {
+    markdown: string;
+    keyStocks: { symbol: string; move: string; trigger: string; importance: string }[];
+  };
+  ratesFx: { markdown: string };
+  commoditiesCrypto: { markdown: string };
+  topNews: {
+    title: string;
+    markdown: string;
+    affectedInstruments: string[];
+    bullishScenario: string;
+    bearishScenario: string;
+  }[];
+  retailImpact: string[];
+  riskScenarios: { markdown: string };
+  sectorHeatmap: { sector: string; sentiment: "bullish" | "bearish" | "neutral"; score: number }[];
 }
 
 const DAILY_BRIEF_SCHEMA = {
   type: "object",
   properties: {
-    marketOverview: { type: "string", description: "3-4 paragrafe cu un rezumat detaliat al piețelor azi, în română. Include mișcări concrete ale S&P 500, Nasdaq, Dow Jones, FTSE, DAX cu procente." },
-    topThemes: {
+    headline: { type: "string" },
+    snapshot: {
+      type: "object",
+      properties: {
+        bullets: { type: "array", items: { type: "string" } },
+        indices: { type: "array", items: { type: "object", properties: { name: { type: "string" }, change: { type: "string" }, value: { type: "string" } }, required: ["name", "change", "value"] } },
+        fx: { type: "array", items: { type: "object", properties: { name: { type: "string" }, change: { type: "string" }, value: { type: "string" } }, required: ["name", "change", "value"] } },
+        rates: { type: "array", items: { type: "object", properties: { name: { type: "string" }, value: { type: "string" } }, required: ["name", "value"] } },
+        commodities: { type: "array", items: { type: "object", properties: { name: { type: "string" }, change: { type: "string" }, value: { type: "string" } }, required: ["name", "change", "value"] } }
+      },
+      required: ["bullets", "indices", "fx", "rates", "commodities"]
+    },
+    macroSentiment: {
+      type: "object",
+      properties: { markdown: { type: "string", description: "Scrie minim 150-200 cuvinte analiza detaliata." } },
+      required: ["markdown"]
+    },
+    equities: {
+      type: "object",
+      properties: {
+        markdown: { type: "string", description: "Scrie o analiza masiva de minim 150 cuvinte pe actiuni." },
+        keyStocks: { type: "array", items: { type: "object", properties: { symbol: { type: "string" }, move: { type: "string" }, trigger: { type: "string" }, importance: { type: "string" } }, required: ["symbol", "move", "trigger", "importance"] } }
+      },
+      required: ["markdown", "keyStocks"]
+    },
+    ratesFx: {
+      type: "object",
+      properties: { markdown: { type: "string", description: "Analiza detaliata de minim 100 cuvinte." } },
+      required: ["markdown"]
+    },
+    commoditiesCrypto: {
+      type: "object",
+      properties: { markdown: { type: "string", description: "Analiza exhaustiva de minim 100 cuvinte pe marfuri." } },
+      required: ["markdown"]
+    },
+    topNews: {
       type: "array",
       items: {
         type: "object",
         properties: {
-          theme: { type: "string" },
-          summary: { type: "string", description: "Rezumat detaliat cu date concrete — prețuri, procente, comparații." },
-          sentiment: { type: "string", enum: ["positive", "negative", "mixed", "uncertain"] },
+          title: { type: "string" },
+          markdown: { type: "string", description: "Explicatie lunga si elaborata a stirii (minim 100 cuv)." },
+          affectedInstruments: { type: "array", items: { type: "string" } },
+          bullishScenario: { type: "string" },
+          bearishScenario: { type: "string" }
         },
-        required: ["theme", "summary", "sentiment"],
-      },
-      description: "5-7 teme dominante ale zilei cu rezumat detaliat.",
+        required: ["title", "markdown", "affectedInstruments", "bullishScenario", "bearishScenario"]
+      }
     },
-    sectorPerformance: {
+    retailImpact: { type: "array", items: { type: "string" }, description: "Return as simple string array." },
+    riskScenarios: {
+      type: "object",
+      properties: { markdown: { type: "string", description: "Descrie extrem de detaliat base, bull, bear cases (200 cuvinte)." } },
+      required: ["markdown"]
+    },
+    sectorHeatmap: {
       type: "array",
       items: {
         type: "object",
         properties: {
-          sector: { type: "string", description: "ex: Tehnologie, Energie, Financiar, Healthcare, Industrial" },
-          direction: { type: "string", enum: ["up", "down", "flat"] },
-          detail: { type: "string", description: "1-2 propoziții cu companii specifice, procente, cauze." },
+          sector: { type: "string", description: "Numele sectorului (ex: Tech, Energie, Bănci)" },
+          sentiment: { type: "string", enum: ["bullish", "bearish", "neutral"] },
+          score: { type: "number", description: "Scor de la 0 la 100 indicând intensitatea (ex: 80 pentru puternic bullish, 20 pentru puternic bearish)" }
         },
-        required: ["sector", "direction", "detail"],
+        required: ["sector", "sentiment", "score"]
       },
-      description: "Performanța pe 5-8 sectoare principale.",
-    },
-    commodities: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          name: { type: "string", description: "ex: Petrol Brent, Petrol WTI, Aur, Argint, Cupru, Gaz Natural" },
-          direction: { type: "string", enum: ["up", "down", "flat"] },
-          detail: { type: "string", description: "Preț curent estimat, variație %, ce a influențat mișcarea." },
-        },
-        required: ["name", "direction", "detail"],
-      },
-      description: "Mărfuri principale (4-6 intrări).",
-    },
-    techHighlights: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          company: { type: "string", description: "ex: Intel, AMD, Nvidia, Micron, Apple, Microsoft, Tesla, TSMC" },
-          detail: { type: "string", description: "Ce s-a întâmplat, mișcare de preț, context." },
-          sentiment: { type: "string", enum: ["positive", "negative", "mixed", "uncertain"] },
-        },
-        required: ["company", "detail", "sentiment"],
-      },
-      description: "4-8 companii tech/semiconductor relevante.",
-    },
-    geopoliticalUpdate: { type: "string", description: "2-3 paragrafe detaliate: Iran/SUA, Orientul Mijlociu, Ucraina/Rusia, tensiuni China/Taiwan. Impact pe piețe, petrol, dolar." },
-    keyEvents: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          time: { type: "string", description: "Ora sau perioadă (ex: '14:30 ET', 'dimineață')" },
-          event: { type: "string" },
-          impact: { type: "string", enum: ["high", "medium", "low"] },
-        },
-        required: ["time", "event", "impact"],
-      },
-      description: "5-10 evenimente cheie de urmărit.",
-    },
-    outlook: { type: "string", description: "2-3 paragrafe — perspectivă pe termen scurt cu scenarii concrete." },
+      description: "Generează o hartă a sentimentului pentru 4-6 sectoare principale bazată pe știrile zilei."
+    }
   },
-  required: ["marketOverview", "topThemes", "sectorPerformance", "commodities", "techHighlights", "geopoliticalUpdate", "keyEvents", "outlook"],
+  required: ["headline", "snapshot", "macroSentiment", "equities", "ratesFx", "commoditiesCrypto", "topNews", "riskScenarios", "sectorHeatmap"]
 };
 
 export const getDailyBrief = createServerFn({ method: "POST" })
   .handler(async (): Promise<{ brief: DailyBrief | null; error?: string }> => {
-    const rlKey = `brief-${Date.now()}`;
-    if (!checkRateLimit(rlKey)) {
-      return { brief: null, error: "Prea multe cereri. Așteaptă un minut." };
+  // Calculăm ID-ul ciclului (se resetează la 8:00 AM ora României)
+  function getBriefCycleId() {
+    const roTime = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Bucharest" }));
+    roTime.setHours(roTime.getHours() - 8);
+    const yyyy = roTime.getFullYear();
+    const mm = String(roTime.getMonth() + 1).padStart(2, '0');
+    const dd = String(roTime.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+  const today = getBriefCycleId();
+
+  // 1. Verificăm stocarea persistentă (Supabase)
+  try {
+    const { data: existingBrief, error: dbErr } = await supabaseAdmin
+      .from("daily_briefs")
+      .select("content")
+      .eq("id", today)
+      .maybeSingle();
+
+    if (existingBrief && existingBrief.content) {
+      console.log("Servim Market Brief din baza de date persistentă!");
+      return { brief: existingBrief.content as DailyBrief };
     }
-  if (dailyBriefCache && Date.now() - dailyBriefCache.ts < 1000 * 60 * 60) {
+  } catch (e) {
+    console.warn("Eroare la verificarea bazei de date. Continuăm generarea...", e);
+  }
+
+  // 2. Fallback la Cache în Memorie (in-memory dev fallback)
+  if (dailyBriefCache && dailyBriefCache.brief.date === today) {
     return { brief: dailyBriefCache.brief };
   }
 
+  if (isGeneratingBrief) {
+    return { brief: null, error: "Brief-ul zilnic este în curs de generare. Te rugăm să reîncarci pagina în 15 secunde." };
+  }
+
+  const rlKey = `global_daily_brief`;
+  if (!checkRateLimit(rlKey, 5)) {
+    return { brief: null, error: "Prea multe cereri. Așteaptă un minut." };
+  }
+
+  isGeneratingBrief = true;
   const newsData = newsCache?.items ?? SEED_NEWS;
   const topNews = newsData.slice(0, 40);
 
-  if (!process.env.LOVABLE_API_KEY) {
-    const fallback: DailyBrief = {
-      date: new Date().toISOString().split("T")[0],
-      marketOverview: "Briefing-ul zilnic necesită AI activat.",
-      topThemes: topNews.slice(0, 3).map(n => ({ theme: n.themes[0] ?? "general", summary: n.title, sentiment: n.sentiment })),
-      keyEvents: [],
-      sectorPerformance: [],
-      commodities: [],
-      techHighlights: [],
-      geopoliticalUpdate: "Activează AI pentru actualizări geopolitice.",
-      outlook: "Activează AI pentru un rezumat complet.",
-      generatedAt: new Date().toISOString(),
-    };
-    return { brief: fallback };
+  if (!process.env.OPENAI_API_KEY) {
+    return { brief: null, error: "Nu este configurat API Key-ul OpenAI." };
   }
 
   const newsSummary = topNews.map((n, i) =>
-    `${i + 1}. [${n.source}] ${n.title} — Impact: ${n.impact}, Sentiment: ${n.sentiment}, Teme: ${n.themes.join(", ")}, Regiuni: ${n.regions.join(", ")}`
-  ).join("\n");
+    `${i + 1}. [${n.source}] ${n.title} — Impact: ${n.impact}, Sentiment: ${n.sentiment}, Teme: ${n.themes.join(", ")}, Regiuni: ${n.regions.join(", ")}\nRezumat: ${n.summary}`
+  ).join("\n\n");
 
-  const sys = `Ești un analist financiar senior la o firmă de investment banking. Scrii briefing-uri zilnice premium în limba română pentru investitori profesioniști. Stilul: precis, cu date concrete (prețuri, procente, valori), fără generalități. Menționezi companii specifice, mișcări de preț concrete, cauze exacte. Focus special pe: Iran/SUA, OPEC, Fed, earnings tech, semiconductori.`;
-  const usr = `Generează un briefing zilnic PREMIUM pe baza acestor ${topNews.length} știri recente:\n\n${newsSummary}\n\nData: ${new Date().toLocaleDateString("ro-RO", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}\n\nIMPORTANT: Fii FOARTE specific cu date, prețuri, procente. Menționează Intel, AMD, Nvidia, Micron, Apple, Microsoft individual. Detalii concrete despre petrol (Brent, WTI), aur, argint. Situația Iran/SUA în detaliu. Performanța pe FIECARE sector major.`;
+  // Fetch live market data to inject into prompt to prevent hallucinated prices (like Gold at 1900)
+  let liveMarketData = "Nu am putut prelua date live de piață, te rog estimează-le tu curent pentru anul 2026.";
+  try {
+    const symbols = ["^GSPC", "^DJI", "^IXIC", "GC=F", "SI=F", "CL=F", "EURUSD=X", "BTC-USD"];
+    const quotes = await yahooFinance.quote(symbols);
+    liveMarketData = "DATE REALE DE PIAȚĂ ÎN ACEST MOMENT (FOLOSEȘTE-LE OBLIGATORIU ÎN SECȚIUNEA 'SNAPSHOT'):\n" +
+      quotes.map(q => `${q.shortName || q.symbol}: Preț Curent: ${q.regularMarketPrice}, Modificare: ${q.regularMarketChangePercent?.toFixed(2)}%`).join("\n");
+  } catch (e) {
+    console.error("Eroare yahoo finance", e);
+  }
+
+  const sys = `Ești un MARKET & NEWS ANALYST SENIOR pentru un desk de tranzacționare global. Scopul tău este să generezi cel mai COMPLEX și EXHAUSTIV Daily Market Brief.
+Nu te zgârci la cuvinte! Fiecare câmp 'markdown' din JSON trebuie să conțină analize de minim 150-200 de cuvinte, cu argumente profunde, context istoric și previziuni detaliate. 
+Gândește ca un analist de top de la Goldman Sachs.`;
+
+  const usr = `DATA CURENTĂ ESTE: ${new Date().toLocaleDateString("ro-RO", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}. 
+Generează un MARKET BRIEF ZILNIC PREMIUM (în ROMÂNĂ) pentru data de astăzi folosind ACESTE ȘTIRI RECENTE:
+
+${newsSummary}
+
+${liveMarketData}
+
+Fii EXTREM de detaliat și analitic în câmpurile "markdown" (scrie eseuri scurte pentru fiecare secțiune, folosind formatare Markdown bogată cu bullet-uri și bold).
+FOLOSEȘTE PREȚURILE REALE DE MAI SUS PENTRU SNAPSHOT. Completează restul din cunoștințele tale generale și știrile curente.`;
 
   try {
     const result = await callAI(usr, sys, DAILY_BRIEF_SCHEMA);
     if (result) {
       const brief: DailyBrief = {
-        date: new Date().toISOString().split("T")[0],
-        ...result,
-        sectorPerformance: result.sectorPerformance ?? [],
-        commodities: result.commodities ?? [],
-        techHighlights: result.techHighlights ?? [],
-        geopoliticalUpdate: result.geopoliticalUpdate ?? "",
+        date: new Date().toLocaleString("ro-RO", { timeZone: "Europe/Bucharest" }),
         generatedAt: new Date().toISOString(),
+        ...result,
       };
+      
+      // Salvăm în in-memory cache
       dailyBriefCache = { brief, ts: Date.now() };
+
+      // Salvăm PERSISTENT în Supabase Database
+      try {
+        await supabaseAdmin.from("daily_briefs").upsert({
+          id: today,
+          content: brief
+        });
+        console.log("Market Brief salvat cu succes în baza de date persistentă!");
+      } catch (e) {
+        console.error("Eroare la salvarea în baza de date Supabase", e);
+      }
+
       return { brief };
     }
     return { brief: null, error: "Nu s-a putut genera briefing-ul." };
   } catch (e) {
     console.error("getDailyBrief", e);
     return { brief: null, error: "Eroare la generarea briefing-ului zilnic." };
+  } finally {
+    isGeneratingBrief = false;
   }
 });
 
@@ -1043,30 +1236,64 @@ let catalystCache: { events: CatalystEvent[]; ts: number } | null = null;
 
 export const getCatalystCalendar = createServerFn({ method: "POST" })
   .handler(async (): Promise<{ events: CatalystEvent[]; error?: string }> => {
-    const rlKey = `catalyst-${Date.now()}`;
-    if (!checkRateLimit(rlKey)) {
-      return { events: [], error: "Prea multe cereri. Așteaptă un minut." };
+  // 1. Verificăm stocarea persistentă (app_cache)
+  try {
+    const { data: cacheRow, error: dbErr } = await supabaseAdmin
+      .from("app_cache")
+      .select("data, updated_at")
+      .eq("id", "calendar-main")
+      .maybeSingle();
+
+    if (cacheRow && cacheRow.data) {
+      const updatedAt = new Date(cacheRow.updated_at).getTime();
+      const ageDays = (Date.now() - updatedAt) / (1000 * 60 * 60 * 24);
+      
+      // Dacă calendarul are mai puțin de 7 zile, îl servim din baza de date
+      if (ageDays < 7) {
+        console.log("Servim Calendarul din baza de date persistentă!");
+        return { events: cacheRow.data as CatalystEvent[] };
+      }
     }
+  } catch (e) {
+    console.warn("Eroare la verificarea bazei de date (Calendar). Continuăm generarea...", e);
+  }
+
+  // 2. Fallback la in-memory cache (ca strat secundar)
   if (catalystCache && Date.now() - catalystCache.ts < 1000 * 60 * 60 * 4) {
     return { events: catalystCache.events };
   }
 
-  if (!process.env.LOVABLE_API_KEY) {
+  if (isGeneratingCalendar) {
+    return { events: getStaticCatalysts(), error: "Calendarul se actualizează chiar acum. Afișăm varianta statică temporar." };
+  }
+
+  const rlKey = `global_catalyst_calendar`;
+  if (!checkRateLimit(rlKey, 5)) {
+    return { events: getStaticCatalysts(), error: "Prea multe cereri de actualizare. Așteaptă un minut." };
+  }
+
+  isGeneratingCalendar = true;
+  if (!process.env.GROQ_API_KEY) {
     return { events: getStaticCatalysts(), error: undefined };
   }
 
   const today = new Date();
   const horizon = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-  const sys = `Ești un analist financiar senior care cunoaște în detaliu calendarul economic global, sezonul de earnings și pipeline-ul de IPO-uri. Generezi DOAR evenimente reale și plauzibile, programate. Scrii în română, clar și concis, fără să inventezi date precise dacă nu le știi (folosește 'TBD' pentru oră).`;
-  const usr = `Generează un calendar bogat de catalizatori de piață pentru perioada ${today.toISOString().split("T")[0]} — ${horizon.toISOString().split("T")[0]} (următoarele ~30 de zile).
+  const newsData = newsCache?.items ?? SEED_NEWS;
+  const recentNewsContext = newsData.slice(0, 50).map(n => `- ${n.title} (Sursa: ${n.source})`).join("\n");
+
+  const sys = `Ești un analist financiar senior care cunoaște în detaliu calendarul economic global. Generezi DOAR evenimente reale și plauzibile, programate. Scrii în română, clar și concis. Acorzi o importanță URIASĂ știrilor de ultimă oră pentru a descoperi evenimente dinamice (lansări spațiale, evenimente corporate).`;
+  const usr = `Generează un calendar bogat de catalizatori de piață pentru perioada ${today.toISOString().split("T")[0]} — ${horizon.toISOString().split("T")[0]}.
+
+CITEȘTE CU ATENȚIE ACESTE ȘTIRI RECENTE PENTRU A DESCOPERI EVENIMENTE DINAMICE (ex: Lansări SpaceX, Evenimente Apple/Tesla, Vizite de Stat):
+${recentNewsContext}
 
 Cerințe:
-- Generează între 25 și 40 de evenimente, distribuite pe toată perioada (nu doar prima săptămână).
-- Include categoriile: earnings majore (big tech, bănci mari, companii cu pondere în indici), date economice (CPI, PPI, PCE, NFP/non-farm payrolls, GDP, PMI, retail sales, jobless claims, sentiment consumatori), decizii ale băncilor centrale (Fed/FOMC, BCE, BoE, BoJ), evenimente geopolitice programate (summit-uri, alegeri, decizii OPEC+), și IPO-uri importante / listări notabile.
-- Pentru fiecare eveniment: descriere de 2-3 propoziții (ce este + context), un câmp 'whyItMatters' cu impactul potențial asupra piețelor și scenarii (ce se întâmplă dacă rezultatul e peste/sub așteptări), iar unde se aplică un câmp 'expectation' cu consensul/estimarea/valoarea anterioară.
+- Generează între 25 și 40 de evenimente. Pune pe primul loc evenimentele pe care le-ai descoperit din știrile de mai sus!
+- Include categoriile clasice: earnings majore, date economice (CPI, NFP), decizii băncilor centrale, dar și IPO-uri sau evenimente geopolitice/tech.
+- Pentru fiecare eveniment: descriere de 2-3 propoziții, un câmp 'whyItMatters' cu impactul potențial, iar unde se aplică un câmp 'expectation'.
 - Adaugă 'tickers' cu simbolurile sau indicii relevanți.
-- Acordă atenție specială IPO-urilor importante și listărilor majore.
 - Sortează implicit cronologic. Doar evenimente reale și credibile.`;
 
   try {
@@ -1078,13 +1305,29 @@ Cerințe:
           id: `cat-${hashString(e.title + e.date)}-${i}`,
         }))
         .sort((a: CatalystEvent, b: CatalystEvent) => a.date.localeCompare(b.date));
+      
       catalystCache = { events, ts: Date.now() };
+
+      // Salvăm PERSISTENT în Supabase app_cache
+      try {
+        await supabaseAdmin.from("app_cache").upsert({
+          id: "calendar-main",
+          data: events,
+          updated_at: new Date().toISOString()
+        });
+        console.log("Calendar salvat cu succes în baza de date persistentă!");
+      } catch (e) {
+        console.error("Eroare la salvarea calendarului în Supabase", e);
+      }
+
       return { events };
     }
     return { events: getStaticCatalysts() };
   } catch (e) {
     console.error("getCatalystCalendar", e);
     return { events: getStaticCatalysts(), error: "Eroare la generarea calendarului." };
+  } finally {
+    isGeneratingCalendar = false;
   }
 });
 

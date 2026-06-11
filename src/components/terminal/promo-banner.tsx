@@ -1,5 +1,4 @@
 import { ArrowRight, GraduationCap, Sparkles, TrendingUp } from "lucide-react";
-import heroAsset from "@/assets/investorhood-hero.jpg.asset.json";
 
 const COURSE_URL = "https://www.investorhood.ro/curs-gratuit/";
 
@@ -17,13 +16,13 @@ export function PromoBanner() {
           {/* IMAGE SIDE */}
           <div className="relative overflow-hidden">
             <img
-              src={heroAsset.url}
+              src="/investorhood-hero.jpg"
               alt="Curs gratuit de investiții la bursă cu InvestorHood — învață de la profesioniști"
               className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04]"
               loading="lazy"
             />
             {/* gradient bridge to text side on desktop */}
-            <div className="pointer-events-none absolute inset-0 hidden bg-gradient-to-r from-transparent via-transparent to-[#0a0f0a] lg:block" />
+            <div className="pointer-events-none absolute inset-0 hidden bg-gradient-to-r from-transparent via-transparent via-80% to-[#0a0f0a] lg:block" />
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#0a0f0a]/70 via-transparent to-transparent lg:hidden" />
           </div>
 

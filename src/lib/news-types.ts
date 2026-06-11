@@ -48,6 +48,7 @@ export interface ArticleAnalysis {
   affectedMarkets: string;
   watchPoints: string[];
   bottomLine: string[];
+  tickers?: string[];
 }
 
 export const THEME_LABELS: Record<ThemeTag, string> = {
@@ -69,3 +70,33 @@ export const STATUS_LABELS: Record<NewsStatus, string> = {
   confirmed: "Confirmed",
   "low-relevance": "Low Relevance",
 };
+
+export interface DailyBrief {
+  date: string;
+  generatedAt: string;
+  headline: string;
+  snapshot: {
+    bullets: string[];
+    indices: { name: string; change: string; value: string }[];
+    fx: { name: string; change: string; value: string }[];
+    rates: { name: string; value: string }[];
+    commodities: { name: string; change: string; value: string }[];
+  };
+  macroSentiment: { markdown: string };
+  equities: {
+    markdown: string;
+    keyStocks: { symbol: string; move: string; trigger: string; importance: string }[];
+  };
+  ratesFx: { markdown: string };
+  commoditiesCrypto: { markdown: string };
+  topNews: {
+    title: string;
+    markdown: string;
+    affectedInstruments: string[];
+    bullishScenario: string;
+    bearishScenario: string;
+  }[];
+  retailImpact: string[];
+  riskScenarios: { markdown: string };
+  pitch: string;
+}

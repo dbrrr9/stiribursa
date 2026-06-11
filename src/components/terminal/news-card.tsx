@@ -19,14 +19,20 @@ export function NewsCard({ item, index = 0, featured = false }: { item: NewsItem
     if (user) toggleSave(item.id, item.title, item.source, item.summary);
   };
 
+  const hoverGlow = 
+    item.sentiment === "positive" ? "hover:border-sentiment-positive/40 hover:shadow-[0_0_25px_-12px_rgba(34,197,94,0.35)]" :
+    item.sentiment === "negative" ? "hover:border-sentiment-negative/40 hover:shadow-[0_0_25px_-12px_rgba(239,68,68,0.35)]" :
+    "hover:border-teal/40 hover:shadow-[0_0_25px_-12px_rgba(20,184,166,0.35)]";
+
   return (
     <Link
       to="/article/$id"
       params={{ id: item.id }}
       className={cn(
-        "group ms-card fade-up block p-5",
+        "group ms-card fade-up block p-5 transition-all duration-300",
+        hoverGlow,
         featured && "md:col-span-2 lg:col-span-2",
-        item.status === "breaking" && "border-impact-high/30 bg-impact-high/[0.02]"
+        item.status === "breaking" && "border-impact-high/40 bg-impact-high/[0.03]"
       )}
       style={{ animationDelay: `${Math.min(index * 40, 300)}ms` }}
     >
@@ -81,10 +87,6 @@ export function NewsCard({ item, index = 0, featured = false }: { item: NewsItem
         </div>
         <div className="flex items-center gap-3">
           <SentimentBadge sentiment={item.sentiment} />
-          <div className="flex items-center gap-1 text-[11px]">
-            <span className="text-muted-foreground">Rel</span>
-            <span className="font-semibold tabular-nums text-foreground">{item.relevanceScore}</span>
-          </div>
         </div>
       </div>
     </Link>
