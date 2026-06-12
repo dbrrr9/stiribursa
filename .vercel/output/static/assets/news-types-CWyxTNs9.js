@@ -1,0 +1,1 @@
+const i={actiuni:"Acțiuni",obligatiuni:"Obligațiuni",indici:"Indici",forex:"Forex",marfuri:"Mărfuri",crypto:"Crypto",macro:"Macro",earnings:"Earnings","banci-centrale":"Bănci Centrale",geopolitica:"Geopolitică"};export{i as T};

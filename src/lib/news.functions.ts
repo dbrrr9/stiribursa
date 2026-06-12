@@ -289,7 +289,7 @@ async function fetchRSSFeed(feed: FeedConfig): Promise<RawArticle[]> {
           "Mozilla/5.0 (compatible; MarketScopeBot/2.0; +https://marketscope.app)",
         Accept: "application/rss+xml, application/xml, text/xml, */*",
       },
-      signal: AbortSignal.timeout(feed.tier === "fallback" ? 6000 : 12000),
+      signal: AbortSignal.timeout(feed.tier === "fallback" ? 3000 : 4000),
     });
     if (!r.ok) {
       console.error(`RSS ${feed.source} ${feed.url} -> ${r.status}`);
@@ -1131,16 +1131,19 @@ export const getDailyBrief = createServerFn({ method: "POST" })
   let liveMarketData = "Nu am putut prelua date live de piață, te rog estimează-le tu curent pentru anul 2026.";
   try {
     const symbols = ["^GSPC", "^DJI", "^IXIC", "GC=F", "SI=F", "CL=F", "EURUSD=X", "BTC-USD"];
-    const quotes = await yahooFinance.quote(symbols);
+    const quotes = await Promise.race([
+      yahooFinance.quote(symbols),
+      new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error("Yahoo Finance timeout")), 2500))
+    ]);
     liveMarketData = "DATE REALE DE PIAȚĂ ÎN ACEST MOMENT (FOLOSEȘTE-LE OBLIGATORIU ÎN SECȚIUNEA 'SNAPSHOT'):\n" +
       quotes.map(q => `${q.shortName || q.symbol}: Preț Curent: ${q.regularMarketPrice}, Modificare: ${q.regularMarketChangePercent?.toFixed(2)}%`).join("\n");
   } catch (e) {
     console.error("Eroare yahoo finance", e);
   }
 
-  const sys = `Ești un MARKET & NEWS ANALYST SENIOR pentru un desk de tranzacționare global. Scopul tău este să generezi cel mai COMPLEX și EXHAUSTIV Daily Market Brief.
-Nu te zgârci la cuvinte! Fiecare câmp 'markdown' din JSON trebuie să conțină analize de minim 150-200 de cuvinte, cu argumente profunde, context istoric și previziuni detaliate. 
-Gândește ca un analist de top de la Goldman Sachs.`;
+  const sys = `Ești un MARKET & NEWS ANALYST SENIOR pentru un desk de tranzacționare global. Scopul tău este să generezi un Daily Market Brief scurt și foarte concis.
+Fiecare câmp 'markdown' din JSON trebuie să fie o analiză esențializată de MAXIM 50-70 de cuvinte.
+Gândește ca un analist de top, dar rezumă totul extrem de concentrat pentru a economisi timp.`;
 
   const usr = `DATA CURENTĂ ESTE: ${new Date().toLocaleDateString("ro-RO", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}. 
 Generează un MARKET BRIEF ZILNIC PREMIUM (în ROMÂNĂ) pentru data de astăzi folosind ACESTE ȘTIRI RECENTE:
@@ -1149,7 +1152,7 @@ ${newsSummary}
 
 ${liveMarketData}
 
-Fii EXTREM de detaliat și analitic în câmpurile "markdown" (scrie eseuri scurte pentru fiecare secțiune, folosind formatare Markdown bogată cu bullet-uri și bold).
+Fii EXTREM de concis și analitic în câmpurile "markdown" (scrie doar un paragraf foarte scurt, esența pură).
 FOLOSEȘTE PREȚURILE REALE DE MAI SUS PENTRU SNAPSHOT. Completează restul din cunoștințele tale generale și știrile curente.`;
 
   try {
