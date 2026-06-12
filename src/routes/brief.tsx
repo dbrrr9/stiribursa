@@ -43,10 +43,15 @@ function BriefPage() {
   const { data: brief, isLoading, isError, error } = useQuery({
     queryKey: ["dailyBrief"],
     queryFn: async () => {
-      const res = await getDailyBrief();
-      if (res?.error) throw new Error(res.error);
-      if (!res?.brief) throw new Error("No data returned");
-      return res.brief;
+      try {
+        const res = await getDailyBrief();
+        if (!res) throw new Error("Response is null/undefined. The server likely crashed or timed out (504).");
+        if (res.error) throw new Error(res.error);
+        if (!res.brief) throw new Error("No brief in response. Raw response: " + JSON.stringify(res));
+        return res.brief;
+      } catch (err: any) {
+        throw new Error(err.message || "Eroare necunoscută la fetch");
+      }
     },
     staleTime: 1000 * 60 * 30, // 30 mins
   });
