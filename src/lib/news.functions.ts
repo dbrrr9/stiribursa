@@ -1014,25 +1014,25 @@ const DAILY_BRIEF_SCHEMA = {
     },
     macroSentiment: {
       type: "object",
-      properties: { markdown: { type: "string", description: "Scrie minim 150-200 cuvinte analiza detaliata." } },
+      properties: { markdown: { type: "string", description: "Scrie scurt si la obiect, un singur paragraf esential." } },
       required: ["markdown"]
     },
     equities: {
       type: "object",
       properties: {
-        markdown: { type: "string", description: "Scrie o analiza masiva de minim 150 cuvinte pe actiuni." },
+        markdown: { type: "string", description: "O scurta sinteza pe actiuni, maxim 2-3 propozitii." },
         keyStocks: { type: "array", items: { type: "object", properties: { symbol: { type: "string" }, move: { type: "string" }, trigger: { type: "string" }, importance: { type: "string" } }, required: ["symbol", "move", "trigger", "importance"] } }
       },
       required: ["markdown", "keyStocks"]
     },
     ratesFx: {
       type: "object",
-      properties: { markdown: { type: "string", description: "Analiza detaliata de minim 100 cuvinte." } },
+      properties: { markdown: { type: "string", description: "Scurt paragraf despre rate si FX." } },
       required: ["markdown"]
     },
     commoditiesCrypto: {
       type: "object",
-      properties: { markdown: { type: "string", description: "Analiza exhaustiva de minim 100 cuvinte pe marfuri." } },
+      properties: { markdown: { type: "string", description: "Scurt paragraf despre marfuri si crypto." } },
       required: ["markdown"]
     },
     topNews: {
