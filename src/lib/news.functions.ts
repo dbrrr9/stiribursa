@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import YahooFinance from "yahoo-finance2";
-const yahooFinance = new YahooFinance();
+// Removed yahoo-finance2 to fix Netlify deployment
 // Auth middleware removed from AI functions — client can't pass auth headers via server fn calls
 import { SEED_NEWS } from "./seed-news";
 import { supabaseAdmin } from "../integrations/supabase/client.server";
@@ -23,7 +22,7 @@ export const ping = createServerFn({ method: "GET" }).handler(() => {
   return { 
     status: "ok", 
     envKeys: Object.keys(process.env).filter(k => k.includes("SUPABASE") || k.includes("OPENAI")),
-    hasYahoo: !!yahooFinance
+    hasYahoo: false
   };
 });
 
@@ -1141,15 +1140,10 @@ export const getDailyBrief = createServerFn({ method: "POST" })
   // Fetch live market data to inject into prompt to prevent hallucinated prices (like Gold at 1900)
   let liveMarketData = "Nu am putut prelua date live de piață, te rog estimează-le tu curent pentru anul 2026.";
   try {
-    const symbols = ["^GSPC", "^DJI", "^IXIC", "GC=F", "SI=F", "CL=F", "EURUSD=X", "BTC-USD"];
-    const quotes = await Promise.race([
-      yahooFinance.quote(symbols),
-      new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error("Yahoo Finance timeout")), 2500))
-    ]);
-    liveMarketData = "DATE REALE DE PIAȚĂ ÎN ACEST MOMENT (FOLOSEȘTE-LE OBLIGATORIU ÎN SECȚIUNEA 'SNAPSHOT'):\n" +
-      quotes.map(q => `${q.shortName || q.symbol}: Preț Curent: ${q.regularMarketPrice}, Modificare: ${q.regularMarketChangePercent?.toFixed(2)}%`).join("\n");
+    // yahooFinance call removed to fix Netlify deployment
+    liveMarketData = "DATE REALE DE PIAȚĂ: Găsește singur estimările.";
   } catch (e) {
-    console.error("Eroare yahoo finance", e);
+    console.error("Eroare", e);
   }
 
   const sys = `Ești un MARKET & NEWS ANALYST SENIOR pentru un desk de tranzacționare global. Scopul tău este să generezi un Daily Market Brief scurt și foarte concis.
