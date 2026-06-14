@@ -19,6 +19,14 @@ import type {
 
 import OpenAI from "openai";
 
+export const ping = createServerFn({ method: "GET" }).handler(() => {
+  return { 
+    status: "ok", 
+    envKeys: Object.keys(process.env).filter(k => k.includes("SUPABASE") || k.includes("OPENAI")),
+    hasYahoo: !!yahooFinance
+  };
+});
+
 const AI_MODEL = "gpt-4o-mini";
 
 // In-memory cache (per worker instance)
