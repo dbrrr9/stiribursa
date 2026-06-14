@@ -613,8 +613,7 @@ export const fetchLatestNews = createServerFn({ method: "GET" }).handler(async (
 // AI ANALYSIS for article detail page
 // ============================================================================
 const ANALYSIS_SCHEMA = {
-  type: "object",
-  properties: {
+  type: "object", additionalProperties: false, properties: {
     summarySimple: {
       type: "string",
       description: "4-6 paragrafe în română clară. Explică detaliat CE s-a întâmplat, contextul, actorii implicați și cifrele concrete (prețuri, procente, valori). Începe simplu pentru un investitor începător, apoi adaugă profunzime. Fără jargon nefiltrat — explică termenii tehnici în paranteză.",
@@ -721,7 +720,7 @@ export const analyzeArticle = createServerFn({ method: "POST" })
       console.error("Failed to fetch from DB", e);
     }
 
-    if (!process.env.GROQ_API_KEY) {
+    if (!process.env.OPENAI_API_KEY) {
       return { analysis: fallbackAnalysis(data) };
     }
 
@@ -1006,50 +1005,43 @@ export interface DailyBrief {
 }
 
 const DAILY_BRIEF_SCHEMA = {
-  type: "object",
-  properties: {
+  type: "object", additionalProperties: false, properties: {
     headline: { type: "string" },
     snapshot: {
-      type: "object",
-      properties: {
+      type: "object", additionalProperties: false, properties: {
         bullets: { type: "array", items: { type: "string" } },
-        indices: { type: "array", items: { type: "object", properties: { name: { type: "string" }, change: { type: "string" }, value: { type: "string" } }, required: ["name", "change", "value"] } },
-        fx: { type: "array", items: { type: "object", properties: { name: { type: "string" }, change: { type: "string" }, value: { type: "string" } }, required: ["name", "change", "value"] } },
-        rates: { type: "array", items: { type: "object", properties: { name: { type: "string" }, value: { type: "string" } }, required: ["name", "value"] } },
-        commodities: { type: "array", items: { type: "object", properties: { name: { type: "string" }, change: { type: "string" }, value: { type: "string" } }, required: ["name", "change", "value"] } }
+        indices: { type: "array", items: { type: "object", additionalProperties: false, properties: { name: { type: "string" }, change: { type: "string" }, value: { type: "string" } }, required: ["name", "change", "value"] } },
+        fx: { type: "array", items: { type: "object", additionalProperties: false, properties: { name: { type: "string" }, change: { type: "string" }, value: { type: "string" } }, required: ["name", "change", "value"] } },
+        rates: { type: "array", items: { type: "object", additionalProperties: false, properties: { name: { type: "string" }, value: { type: "string" } }, required: ["name", "value"] } },
+        commodities: { type: "array", items: { type: "object", additionalProperties: false, properties: { name: { type: "string" }, change: { type: "string" }, value: { type: "string" } }, required: ["name", "change", "value"] } }
       },
       required: ["bullets", "indices", "fx", "rates", "commodities"]
     },
     macroSentiment: {
-      type: "object",
-      properties: { markdown: { type: "string", description: "Scrie scurt si la obiect, un singur paragraf esential." } },
+      type: "object", additionalProperties: false, properties: { markdown: { type: "string", description: "Scrie scurt si la obiect, un singur paragraf esential." } },
       required: ["markdown"]
     },
     equities: {
-      type: "object",
-      properties: {
+      type: "object", additionalProperties: false, properties: {
         markdown: { type: "string", description: "O scurta sinteza pe actiuni, maxim 2-3 propozitii." },
-        keyStocks: { type: "array", items: { type: "object", properties: { symbol: { type: "string" }, move: { type: "string" }, trigger: { type: "string" }, importance: { type: "string" } }, required: ["symbol", "move", "trigger", "importance"] } }
+        keyStocks: { type: "array", items: { type: "object", additionalProperties: false, properties: { symbol: { type: "string" }, move: { type: "string" }, trigger: { type: "string" }, importance: { type: "string" } }, required: ["symbol", "move", "trigger", "importance"] } }
       },
       required: ["markdown", "keyStocks"]
     },
     ratesFx: {
-      type: "object",
-      properties: { markdown: { type: "string", description: "Scurt paragraf despre rate si FX." } },
+      type: "object", additionalProperties: false, properties: { markdown: { type: "string", description: "Scurt paragraf despre rate si FX." } },
       required: ["markdown"]
     },
     commoditiesCrypto: {
-      type: "object",
-      properties: { markdown: { type: "string", description: "Scurt paragraf despre marfuri si crypto." } },
+      type: "object", additionalProperties: false, properties: { markdown: { type: "string", description: "Scurt paragraf despre marfuri si crypto." } },
       required: ["markdown"]
     },
     topNews: {
       type: "array",
       items: {
-        type: "object",
-        properties: {
+        type: "object", additionalProperties: false, properties: {
           title: { type: "string" },
-          markdown: { type: "string", description: "Explicatie lunga si elaborata a stirii (minim 100 cuv)." },
+          markdown: { type: "string", description: "Explicatie a stirii (maxim 40 cuv)." },
           affectedInstruments: { type: "array", items: { type: "string" } },
           bullishScenario: { type: "string" },
           bearishScenario: { type: "string" }
@@ -1059,15 +1051,13 @@ const DAILY_BRIEF_SCHEMA = {
     },
     retailImpact: { type: "array", items: { type: "string" }, description: "Return as simple string array." },
     riskScenarios: {
-      type: "object",
-      properties: { markdown: { type: "string", description: "Descrie extrem de detaliat base, bull, bear cases (200 cuvinte)." } },
+      type: "object", additionalProperties: false, properties: { markdown: { type: "string", description: "Descrie extrem de detaliat base, bull, bear cases (200 cuvinte)." } },
       required: ["markdown"]
     },
     sectorHeatmap: {
       type: "array",
       items: {
-        type: "object",
-        properties: {
+        type: "object", additionalProperties: false, properties: {
           sector: { type: "string", description: "Numele sectorului (ex: Tech, Energie, Bănci)" },
           sentiment: { type: "string", enum: ["bullish", "bearish", "neutral"] },
           score: { type: "number", description: "Scor de la 0 la 100 indicând intensitatea (ex: 80 pentru puternic bullish, 20 pentru puternic bearish)" }
@@ -1125,7 +1115,7 @@ export const getDailyBrief = createServerFn({ method: "POST" })
 
   isGeneratingBrief = true;
   const newsData = newsCache?.items ?? SEED_NEWS;
-  const topNews = newsData.slice(0, 40);
+  const topNews = newsData.slice(0, 7);
 
   if (!process.env.OPENAI_API_KEY) {
     return { brief: null, error: "Nu este configurat API Key-ul OpenAI." };
@@ -1211,13 +1201,11 @@ export interface CatalystEvent {
 }
 
 const CATALYST_SCHEMA = {
-  type: "object",
-  properties: {
+  type: "object", additionalProperties: false, properties: {
     events: {
       type: "array",
       items: {
-        type: "object",
-        properties: {
+        type: "object", additionalProperties: false, properties: {
           date: { type: "string", description: "YYYY-MM-DD" },
           time: { type: "string", description: "HH:MM ET sau 'TBD'" },
           title: { type: "string" },
@@ -1278,7 +1266,7 @@ export const getCatalystCalendar = createServerFn({ method: "POST" })
   }
 
   isGeneratingCalendar = true;
-  if (!process.env.GROQ_API_KEY) {
+  if (!process.env.OPENAI_API_KEY) {
     return { events: getStaticCatalysts(), error: undefined };
   }
 
@@ -1286,7 +1274,7 @@ export const getCatalystCalendar = createServerFn({ method: "POST" })
   const horizon = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
 
   const newsData = newsCache?.items ?? SEED_NEWS;
-  const recentNewsContext = newsData.slice(0, 50).map(n => `- ${n.title} (Sursa: ${n.source})`).join("\n");
+  const recentNewsContext = newsData.slice(0, 15).map(n => `- ${n.title} (Sursa: ${n.source})`).join("\n");
 
   const sys = `Ești un analist financiar senior care cunoaște în detaliu calendarul economic global. Generezi DOAR evenimente reale și plauzibile, programate. Scrii în română, clar și concis. Acorzi o importanță URIASĂ știrilor de ultimă oră pentru a descoperi evenimente dinamice (lansări spațiale, evenimente corporate).`;
   const usr = `Generează un calendar bogat de catalizatori de piață pentru perioada ${today.toISOString().split("T")[0]} — ${horizon.toISOString().split("T")[0]}.
