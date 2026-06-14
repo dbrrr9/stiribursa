@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import yahooFinance from "yahoo-finance2";
+import YahooFinance from "yahoo-finance2";
+const yahooFinance = new YahooFinance();
 // Auth middleware removed from AI functions — client can't pass auth headers via server fn calls
 import { SEED_NEWS } from "./seed-news";
 import { supabaseAdmin } from "../integrations/supabase/client.server";

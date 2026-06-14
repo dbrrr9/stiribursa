@@ -103,31 +103,31 @@ async function getStartManifest(matchedRoutes) {
 const manifest = {
   "4651190ab9113166fb4da1cfc1f9319a90370f6cc92f418c955c434c780911d1": {
     functionName: "getNewsItem_createServerFn_handler",
-    importer: () => import("./news.functions-niAmhBfz.mjs")
+    importer: () => import("./news.functions-BMxMpQ06.mjs")
   },
   "719386e45a3b398eb0cd70b3e87a30b2bf2e9665daadf3215d88aadd90030ae7": {
     functionName: "getAdvancedScore_createServerFn_handler",
-    importer: () => import("./news.functions-niAmhBfz.mjs")
+    importer: () => import("./news.functions-BMxMpQ06.mjs")
   },
   "81b5009926f42f55a7fbc2b451cff21bf7b58fa119f8bed28319e7c6bc05f9b6": {
     functionName: "getCatalystCalendar_createServerFn_handler",
-    importer: () => import("./news.functions-niAmhBfz.mjs")
+    importer: () => import("./news.functions-BMxMpQ06.mjs")
   },
   "aa90e7a9f934fbc983e2f594d62596dd17bbaba6dfe3da37b0bc248845a60fd1": {
     functionName: "fetchLatestNews_createServerFn_handler",
-    importer: () => import("./news.functions-niAmhBfz.mjs")
+    importer: () => import("./news.functions-BMxMpQ06.mjs")
   },
   "b945fb25e25c44bb57d678ccd31cae7201bb86a5cc527889fab92c56d6f2f0cf": {
     functionName: "analyzeArticle_createServerFn_handler",
-    importer: () => import("./news.functions-niAmhBfz.mjs")
+    importer: () => import("./news.functions-BMxMpQ06.mjs")
   },
   "c8e1a309006ba4eb9d84e028c8972894bb2cc14d7dd91dfe03b2ef830937ac32": {
     functionName: "getDailyBrief_createServerFn_handler",
-    importer: () => import("./news.functions-niAmhBfz.mjs")
+    importer: () => import("./news.functions-BMxMpQ06.mjs")
   },
   "db7b1357bdebe0f3f40a9f13257398f169921f8571986ddba81aa0fead24a527": {
     functionName: "analyzeCustomNews_createServerFn_handler",
-    importer: () => import("./news.functions-niAmhBfz.mjs")
+    importer: () => import("./news.functions-BMxMpQ06.mjs")
   }
 };
 async function getServerFnById(id, access) {
