@@ -144,7 +144,7 @@ const SOURCE_MIN_RELEVANCE: Partial<Record<NewsSource, number>> = {
   "Yahoo Finance": 62,
 };
 const MIN_LIVE_ITEMS_BEFORE_SEED = 6;
-const NEWS_FETCH_CONCURRENCY = 6;
+const NEWS_FETCH_CONCURRENCY = 20;
 const EMPTY_RETRY_DELAY_MS = 1000 * 45;
 
 
@@ -172,7 +172,7 @@ async function callAI(prompt: string, system: string, jsonSchema?: object) {
       messages,
       max_tokens: 10000,
       response_format: jsonSchema ? { type: "json_object" } : undefined,
-    });
+    }, { timeout: 7000 });
 
     const content = response.choices[0].message.content;
     if (jsonSchema) {
@@ -298,7 +298,7 @@ async function fetchRSSFeed(feed: FeedConfig): Promise<RawArticle[]> {
           "Mozilla/5.0 (compatible; MarketScopeBot/2.0; +https://marketscope.app)",
         Accept: "application/rss+xml, application/xml, text/xml, */*",
       },
-      signal: AbortSignal.timeout(feed.tier === "fallback" ? 3000 : 4000),
+      signal: AbortSignal.timeout(feed.tier === "fallback" ? 2000 : 3500),
     });
     if (!r.ok) {
       console.error(`RSS ${feed.source} ${feed.url} -> ${r.status}`);
