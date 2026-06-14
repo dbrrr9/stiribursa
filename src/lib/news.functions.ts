@@ -520,7 +520,6 @@ function hashString(s: string): string {
 // MAIN: fetch news from RSS feeds
 // ============================================================================
 export const fetchLatestNews = createServerFn({ method: "GET" }).handler(async () => {
-  return { items: SEED_NEWS, cached: false, source: "seed" as const };
   try {
     const { data: latestNews } = await supabaseAdmin
       .from('news_items')
@@ -1083,7 +1082,6 @@ const DAILY_BRIEF_SCHEMA = {
 
 export const getDailyBrief = createServerFn({ method: "POST" })
   .handler(async (): Promise<{ brief: DailyBrief | null; error?: string }> => {
-  return { brief: null, error: "Short circuit debug!" };
   // Calculăm ID-ul ciclului (se resetează la 8:00 AM ora României)
   function getBriefCycleId() {
     const roTime = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Bucharest" }));
