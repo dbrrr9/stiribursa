@@ -721,6 +721,7 @@ export const analyzeArticle = createServerFn({ method: "POST" })
     }
 
     if (!process.env.OPENAI_API_KEY) {
+      console.error("OPENAI_API_KEY lipsește în analyzeArticle!");
       return { analysis: fallbackAnalysis(data) };
     }
 
@@ -1041,12 +1042,9 @@ const DAILY_BRIEF_SCHEMA = {
       items: {
         type: "object", additionalProperties: false, properties: {
           title: { type: "string" },
-          markdown: { type: "string", description: "Explicatie a stirii (maxim 40 cuv)." },
-          affectedInstruments: { type: "array", items: { type: "string" } },
-          bullishScenario: { type: "string" },
-          bearishScenario: { type: "string" }
+          markdown: { type: "string", description: "O propozitie scurta." }
         },
-        required: ["title", "markdown", "affectedInstruments", "bullishScenario", "bearishScenario"]
+        required: ["title", "markdown"]
       }
     },
     retailImpact: { type: "array", items: { type: "string" }, description: "Return as simple string array." },
@@ -1115,10 +1113,11 @@ export const getDailyBrief = createServerFn({ method: "POST" })
 
   isGeneratingBrief = true;
   const newsData = newsCache?.items ?? SEED_NEWS;
-  const topNews = newsData.slice(0, 7);
+  const topNews = newsData.slice(0, 4);
 
   if (!process.env.OPENAI_API_KEY) {
-    return { brief: null, error: "Nu este configurat API Key-ul OpenAI." };
+    const keyStatus = process.env.OPENAI_API_KEY ? process.env.OPENAI_API_KEY.substring(0, 3) + "..." : "LIPSA";
+    return { brief: null, error: `Nu este configurat API Key-ul OpenAI. Status cheie: ${keyStatus}` };
   }
 
   const newsSummary = topNews.map((n, i) =>
