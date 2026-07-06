@@ -786,6 +786,7 @@ Generează o analiză completă urmând schema cerută.`;
 export const getNewsItem = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => z.object({ id: z.string().min(1).max(128) }).parse(data))
   .handler(async ({ data }) => {
+    // 1. Try Supabase DB first
     try {
       const { data: dbItem } = await supabaseAdmin
         .from('news_items')
@@ -815,8 +816,20 @@ export const getNewsItem = createServerFn({ method: "POST" })
       console.error("Failed to get news item from DB", e);
     }
     
+    // 2. Try SEED_NEWS
     const seed = SEED_NEWS.find((n) => n.id === data.id);
-    return { item: seed ?? null };
+    if (seed) return { item: seed };
+
+    // 3. Fallback: fetch fresh news and search there
+    try {
+      const freshNews = await fetchLatestNews();
+      const found = freshNews.items.find((n) => n.id === data.id);
+      if (found) return { item: found };
+    } catch (e) {
+      console.error("Fallback fetchLatestNews failed in getNewsItem", e);
+    }
+
+    return { item: null };
   });
 
 // ============================================================================
