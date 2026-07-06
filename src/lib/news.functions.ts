@@ -1077,7 +1077,7 @@ export const getDailyBrief = createServerFn({ method: "POST" })
     const yyyy = roTime.getFullYear();
     const mm = String(roTime.getMonth() + 1).padStart(2, '0');
     const dd = String(roTime.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
+    return `${yyyy}-${mm}-${dd}-v2`;
   }
   const today = getBriefCycleId();
 
@@ -1113,7 +1113,7 @@ export const getDailyBrief = createServerFn({ method: "POST" })
 
   isGeneratingBrief = true;
   const newsData = newsCache?.items ?? SEED_NEWS;
-  const topNews = newsData.slice(0, 4);
+  const topNews = newsData.slice(0, 15);
 
   if (!process.env.OPENAI_API_KEY) {
     const keyStatus = process.env.OPENAI_API_KEY ? process.env.OPENAI_API_KEY.substring(0, 3) + "..." : "LIPSA";
@@ -1133,19 +1133,17 @@ export const getDailyBrief = createServerFn({ method: "POST" })
     console.error("Eroare", e);
   }
 
-  const sys = `Ești un MARKET & NEWS ANALYST SENIOR pentru un desk de tranzacționare global. Scopul tău este să generezi un Daily Market Brief scurt și foarte concis.
-Fiecare câmp 'markdown' din JSON trebuie să fie o analiză esențializată de MAXIM 50-70 de cuvinte.
-Gândește ca un analist de top, dar rezumă totul extrem de concentrat pentru a economisi timp.`;
+  const sys = `Ești un MARKET & NEWS ANALYST SENIOR pentru un desk de tranzacționare global. Scopul tău este să generezi un Daily Market Brief PROFESIONAL și EXTREM DE DETALIAT.
+Scrie analize profunde, complexe, cu cifre și previziuni, explicând contextul macroeconomic și geopolitic. Nu te limita la propoziții scurte, scrie cel puțin 2-3 paragrafe bogate în informații pentru fiecare secțiune.
+Gândește ca un analist de top pe Wall Street care livrează un raport premium pentru clienți instituționali.`;
 
   const usr = `DATA CURENTĂ ESTE: ${new Date().toLocaleDateString("ro-RO", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}. 
 Generează un MARKET BRIEF ZILNIC PREMIUM (în ROMÂNĂ) pentru data de astăzi folosind ACESTE ȘTIRI RECENTE:
 
 ${newsSummary}
 
-${liveMarketData}
-
-Fii EXTREM de concis și analitic în câmpurile "markdown" (scrie doar un paragraf foarte scurt, esența pură).
-FOLOSEȘTE PREȚURILE REALE DE MAI SUS PENTRU SNAPSHOT. Completează restul din cunoștințele tale generale și știrile curente.`;
+Fii EXTREM de detaliat și analitic în câmpurile "markdown". Oferă context, cauzalitate și predicții.
+Completează restul din cunoștințele tale generale și știrile curente, aducând un plus de valoare peste știrile oferite.`;
 
   try {
     const result = await callAI(usr, sys, DAILY_BRIEF_SCHEMA);
