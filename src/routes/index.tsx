@@ -128,7 +128,7 @@ function HomePage() {
         </section>
 
         {/* PROMO — InvestorHood curs gratuit */}
-        {!hasActiveFilters && <PromoBanner />}
+        {/* {!hasActiveFilters && <PromoBanner />} */}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* LEFT COLUMN - MAIN FEED (70%) */}
