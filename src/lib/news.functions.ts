@@ -168,7 +168,7 @@ async function callAI(prompt: string, system: string, jsonSchema?: object) {
     const response = await openai.chat.completions.create({
       model: AI_MODEL,
       messages,
-      max_tokens: 10000,
+      max_tokens: 16000,
       response_format: jsonSchema ? { type: "json_object" } : undefined,
     }, { timeout: 60000 });
 
@@ -1006,62 +1006,66 @@ export interface DailyBrief {
 
 const DAILY_BRIEF_SCHEMA = {
   type: "object", additionalProperties: false, properties: {
-    headline: { type: "string" },
+    headline: { type: "string", description: "Un titlu puternic și profesional pentru briefingul zilei, de tip 'Market Brief: [tema principală]'. Maxim 10-15 cuvinte." },
     snapshot: {
       type: "object", additionalProperties: false, properties: {
-        bullets: { type: "array", items: { type: "string" } },
-        indices: { type: "array", items: { type: "object", additionalProperties: false, properties: { name: { type: "string" }, change: { type: "string" }, value: { type: "string" } }, required: ["name", "change", "value"] } },
-        fx: { type: "array", items: { type: "object", additionalProperties: false, properties: { name: { type: "string" }, change: { type: "string" }, value: { type: "string" } }, required: ["name", "change", "value"] } },
-        rates: { type: "array", items: { type: "object", additionalProperties: false, properties: { name: { type: "string" }, value: { type: "string" } }, required: ["name", "value"] } },
-        commodities: { type: "array", items: { type: "object", additionalProperties: false, properties: { name: { type: "string" }, change: { type: "string" }, value: { type: "string" } }, required: ["name", "change", "value"] } }
+        bullets: { type: "array", items: { type: "string", description: "Fiecare bullet trebuie să fie o propoziție completă de 15-25 cuvinte care captează esența unei știri majore." }, description: "5-7 bullet points cu cele mai importante evenimente ale zilei." },
+        indices: { type: "array", items: { type: "object", additionalProperties: false, properties: { name: { type: "string" }, change: { type: "string", description: "Variația procentuală estimată (ex: '+0.85%' sau '-1.2%'). Estimează realist pe baza sentimentului din știri." }, value: { type: "string", description: "Valoarea estimată realistă a indicelui (ex: '5,450.30'). Folosește valori plauzibile pentru 2026." } }, required: ["name", "change", "value"] }, description: "Minim 4 indici: S&P 500, NASDAQ, FTSE 100, DAX. Estimează valori realiste." },
+        fx: { type: "array", items: { type: "object", additionalProperties: false, properties: { name: { type: "string" }, change: { type: "string" }, value: { type: "string" } }, required: ["name", "change", "value"] }, description: "Minim 3 perechi: EUR/USD, USD/JPY, GBP/USD. Estimează valori realiste." },
+        rates: { type: "array", items: { type: "object", additionalProperties: false, properties: { name: { type: "string" }, value: { type: "string" } }, required: ["name", "value"] }, description: "Randamente obligațiuni: Treasury 10Y, Bund 10Y. Estimează realist." },
+        commodities: { type: "array", items: { type: "object", additionalProperties: false, properties: { name: { type: "string" }, change: { type: "string" }, value: { type: "string" } }, required: ["name", "change", "value"] }, description: "Petrol Brent, Aur, eventual Argint sau Bitcoin. Estimează valori realiste." }
       },
       required: ["bullets", "indices", "fx", "rates", "commodities"]
     },
     macroSentiment: {
-      type: "object", additionalProperties: false, properties: { markdown: { type: "string", description: "Scrie scurt si la obiect, un singur paragraf esential." } },
+      type: "object", additionalProperties: false, properties: { markdown: { type: "string", description: "Analiză DETALIATĂ de minim 150-200 de cuvinte despre sentimentul macro global. Include politica monetară (Fed, BCE, BoJ), inflație, creștere economică, riscuri geopolitice. Scrie ca un analist Goldman Sachs." } },
       required: ["markdown"]
     },
     equities: {
       type: "object", additionalProperties: false, properties: {
-        markdown: { type: "string", description: "O scurta sinteza pe actiuni, maxim 2-3 propozitii." },
-        keyStocks: { type: "array", items: { type: "object", additionalProperties: false, properties: { symbol: { type: "string" }, move: { type: "string" }, trigger: { type: "string" }, importance: { type: "string" } }, required: ["symbol", "move", "trigger", "importance"] } }
+        markdown: { type: "string", description: "Analiză DETALIATĂ de minim 150-200 cuvinte despre piața de acțiuni. Menționează sectoare specifice, companii individuale (NVDA, AAPL, MSFT etc.), earnings, rotații sectoriale, fluxuri instituționale." },
+        keyStocks: { type: "array", items: { type: "object", additionalProperties: false, properties: { symbol: { type: "string" }, move: { type: "string", description: "Variație procentuală estimată (ex: '+3.2%' sau '-1.5%')" }, trigger: { type: "string", description: "Explicație scurtă a catalizatorului (ex: 'Earnings Q2 peste așteptări')" }, importance: { type: "string", enum: ["high", "medium", "low"] } }, required: ["symbol", "move", "trigger", "importance"] }, description: "4-8 acțiuni cheie mișcate de știrile zilei." }
       },
       required: ["markdown", "keyStocks"]
     },
     ratesFx: {
-      type: "object", additionalProperties: false, properties: { markdown: { type: "string", description: "Scurt paragraf despre rate si FX." } },
+      type: "object", additionalProperties: false, properties: { markdown: { type: "string", description: "Analiză DETALIATĂ de minim 120-180 cuvinte despre piața obligațiunilor, yield-uri, spread-uri de credit, și piața valutară (EUR/USD, USD/JPY, DXY). Explică mecanismele de transmisie." } },
       required: ["markdown"]
     },
     commoditiesCrypto: {
-      type: "object", additionalProperties: false, properties: { markdown: { type: "string", description: "Scurt paragraf despre marfuri si crypto." } },
+      type: "object", additionalProperties: false, properties: { markdown: { type: "string", description: "Analiză DETALIATĂ de minim 120-180 cuvinte despre mărfuri (petrol, aur, metale industriale) și crypto (Bitcoin, ETF-uri). Include factori de cerere/ofertă, OPEC+, tendințe." } },
       required: ["markdown"]
     },
     topNews: {
       type: "array",
       items: {
         type: "object", additionalProperties: false, properties: {
-          title: { type: "string" },
-          markdown: { type: "string", description: "O propozitie scurta." }
+          title: { type: "string", description: "Titlul știrii principale." },
+          markdown: { type: "string", description: "Analiză detaliată de 80-150 cuvinte: ce s-a întâmplat, de ce contează, ce impact are pe piețe." },
+          bullishScenario: { type: "string", description: "Scenariul optimist în 1-2 propoziții: ce s-ar întâmpla în cel mai bun caz pentru investitori." },
+          bearishScenario: { type: "string", description: "Scenariul pesimist în 1-2 propoziții: ce riscuri prezintă pentru piețe." },
+          affectedInstruments: { type: "array", items: { type: "string" }, description: "3-6 instrumente/tickere afectate direct (ex: 'NVDA', 'Brent Oil', 'EUR/USD', 'Treasury 10Y')." }
         },
-        required: ["title", "markdown"]
-      }
+        required: ["title", "markdown", "bullishScenario", "bearishScenario", "affectedInstruments"]
+      },
+      description: "3-5 știri principale cu analiză detaliată, scenarii bull/bear și instrumente afectate."
     },
-    retailImpact: { type: "array", items: { type: "string" }, description: "Return as simple string array." },
+    retailImpact: { type: "array", items: { type: "string" }, description: "4-6 sfaturi concrete și acționabile pentru investitorii retail, formulate ca propoziții complete." },
     riskScenarios: {
-      type: "object", additionalProperties: false, properties: { markdown: { type: "string", description: "Descrie extrem de detaliat base, bull, bear cases (200 cuvinte)." } },
+      type: "object", additionalProperties: false, properties: { markdown: { type: "string", description: "Descrie EXTREM de detaliat (minim 200 cuvinte) trei scenarii: BASE CASE (cel mai probabil), BULL CASE (optimist) și BEAR CASE (pesimist). Pentru fiecare, include probabilitatea estimată, catalizatorii și implicațiile pentru portofoliu." } },
       required: ["markdown"]
     },
     sectorHeatmap: {
       type: "array",
       items: {
         type: "object", additionalProperties: false, properties: {
-          sector: { type: "string", description: "Numele sectorului (ex: Tech, Energie, Bănci)" },
+          sector: { type: "string", description: "Numele sectorului (ex: Tech, Energie, Bănci, Sănătate, Industrie, Imobiliare)" },
           sentiment: { type: "string", enum: ["bullish", "bearish", "neutral"] },
           score: { type: "number", description: "Scor de la 0 la 100 indicând intensitatea (ex: 80 pentru puternic bullish, 20 pentru puternic bearish)" }
         },
         required: ["sector", "sentiment", "score"]
       },
-      description: "Generează o hartă a sentimentului pentru 4-6 sectoare principale bazată pe știrile zilei."
+      description: "Generează o hartă a sentimentului pentru 5-7 sectoare principale bazată pe știrile zilei."
     }
   },
   required: ["headline", "snapshot", "macroSentiment", "equities", "ratesFx", "commoditiesCrypto", "topNews", "riskScenarios", "sectorHeatmap"]
@@ -1076,7 +1080,7 @@ export const getDailyBrief = createServerFn({ method: "POST" })
     const yyyy = roTime.getFullYear();
     const mm = String(roTime.getMonth() + 1).padStart(2, '0');
     const dd = String(roTime.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}-v5`;
+    return `${yyyy}-${mm}-${dd}-v6`;
   }
   const today = getBriefCycleId();
 
