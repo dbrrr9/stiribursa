@@ -171,7 +171,7 @@ async function callAI(prompt: string, system: string, jsonSchema?: object) {
       messages,
       max_tokens: 10000,
       response_format: jsonSchema ? { type: "json_object" } : undefined,
-    }, { timeout: 7000 });
+    }, { timeout: 60000 });
 
     const content = response.choices[0].message.content;
     if (jsonSchema) {
