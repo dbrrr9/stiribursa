@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-// Removed yahoo-finance2 to fix Netlify deployment
+import yahooFinance from "yahoo-finance2";
 // Auth middleware removed from AI functions — client can't pass auth headers via server fn calls
 import { SEED_NEWS } from "./seed-news";
 import { supabaseAdmin } from "../integrations/supabase/client.server";
@@ -1077,7 +1077,7 @@ export const getDailyBrief = createServerFn({ method: "POST" })
     const yyyy = roTime.getFullYear();
     const mm = String(roTime.getMonth() + 1).padStart(2, '0');
     const dd = String(roTime.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}-v2`;
+    return `${yyyy}-${mm}-${dd}-v3`;
   }
   const today = getBriefCycleId();
 
@@ -1127,20 +1127,27 @@ export const getDailyBrief = createServerFn({ method: "POST" })
   // Fetch live market data to inject into prompt to prevent hallucinated prices (like Gold at 1900)
   let liveMarketData = "Nu am putut prelua date live de piață, te rog estimează-le tu curent pentru anul 2026.";
   try {
-    // yahooFinance call removed to fix Netlify deployment
-    liveMarketData = "DATE REALE DE PIAȚĂ: Găsește singur estimările.";
+    const symbols = ["^GSPC", "^DJI", "^IXIC", "GC=F", "SI=F", "CL=F", "EURUSD=X", "BTC-USD"];
+    const quotes = await Promise.race([
+      yahooFinance.quote(symbols),
+      new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error("Yahoo Finance timeout")), 4500))
+    ]);
+    liveMarketData = "DATE REALE DE PIAȚĂ ÎN ACEST MOMENT (FOLOSEȘTE-LE OBLIGATORIU ÎN SECȚIUNEA 'SNAPSHOT'):\n" +
+      quotes.map(q => `${q.shortName || q.symbol}: Preț Curent: ${q.regularMarketPrice}, Modificare: ${q.regularMarketChangePercent?.toFixed(2)}%`).join("\n");
   } catch (e) {
-    console.error("Eroare", e);
+    console.error("Eroare yahoo finance", e);
   }
 
-  const sys = `Ești un MARKET & NEWS ANALYST SENIOR pentru un desk de tranzacționare global. Scopul tău este să generezi un Daily Market Brief PROFESIONAL și EXTREM DE DETALIAT.
-Scrie analize profunde, complexe, cu cifre și previziuni, explicând contextul macroeconomic și geopolitic. Nu te limita la propoziții scurte, scrie cel puțin 2-3 paragrafe bogate în informații pentru fiecare secțiune.
-Gândește ca un analist de top pe Wall Street care livrează un raport premium pentru clienți instituționali.`;
+  const sys = `Ești un MARKET & NEWS ANALYST SENIOR pentru un desk de tranzacționare global. Scopul tău este să generezi cel mai COMPLEX și EXHAUSTIV Daily Market Brief.
+Nu te zgârci la cuvinte! Fiecare câmp 'markdown' din JSON trebuie să conțină analize de minim 150-200 de cuvinte, cu argumente profunde, context istoric și previziuni detaliate. 
+Gândește ca un analist de top de la Goldman Sachs.`;
 
   const usr = `DATA CURENTĂ ESTE: ${new Date().toLocaleDateString("ro-RO", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}. 
 Generează un MARKET BRIEF ZILNIC PREMIUM (în ROMÂNĂ) pentru data de astăzi folosind ACESTE ȘTIRI RECENTE:
 
 ${newsSummary}
+
+${liveMarketData}
 
 Fii EXTREM de detaliat și analitic în câmpurile "markdown". Oferă context, cauzalitate și predicții.
 Completează restul din cunoștințele tale generale și știrile curente, aducând un plus de valoare peste știrile oferite.`;
