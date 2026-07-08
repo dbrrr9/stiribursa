@@ -1225,7 +1225,7 @@ export const getDailyBrief = createServerFn({ method: "POST" })
     const yyyy = roTime.getFullYear();
     const mm = String(roTime.getMonth() + 1).padStart(2, '0');
     const dd = String(roTime.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}-v7`;
+    return `${yyyy}-${mm}-${dd}-v8`;
   }
   const today = getBriefCycleId();
 
@@ -1267,7 +1267,17 @@ export const getDailyBrief = createServerFn({ method: "POST" })
   }
 
   // Fetch live market data + news in parallel
-  const newsData = newsCache?.items ?? SEED_NEWS;
+  let newsData = newsCache?.items;
+  if (!newsData || newsData.length === 0) {
+    try {
+      console.log("newsCache is empty. Fetching fresh news for Daily Brief...");
+      const res = await fetchLatestNews();
+      newsData = res.items && res.items.length > 0 ? res.items : SEED_NEWS;
+    } catch (e) {
+      console.error("Failed to fetch fresh news for brief:", e);
+      newsData = SEED_NEWS;
+    }
+  }
   const topNews = newsData.slice(0, 15);
 
   let liveMarketData = "";
