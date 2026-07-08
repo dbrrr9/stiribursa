@@ -985,103 +985,235 @@ export const analyzeCustomNews = createServerFn({ method: "POST" })
   );
 
 // ============================================================================
-// PHASE 3: Daily Brief
+// PHASE 3: Daily Brief — Bloomberg Terminal Edition
 // ============================================================================
+
+// --- Live Market Data Fetcher ---
+async function fetchLiveMarketData(): Promise<string> {
+  const results: string[] = [];
+  const timestamp = new Date().toLocaleString("ro-RO", { timeZone: "Europe/Bucharest", dateStyle: "short", timeStyle: "short" });
+
+  // 1. Twelve Data — Indices, FX, Commodities
+  const tdKey = process.env.TWELVE_DATA_API_KEY;
+  if (tdKey) {
+    try {
+      const symbols = "SPX,IXIC,DJI,DAX,FTSE,NI225,HSI,KOSPI";
+      const fxSymbols = "EUR/USD,USD/JPY,GBP/USD";
+      const commoditySymbols = "XAU/USD,XAG/USD";
+
+      const [indicesRes, fxRes, commodRes] = await Promise.all([
+        fetch(`https://api.twelvedata.com/quote?symbol=${symbols}&apikey=${tdKey}`, { signal: AbortSignal.timeout(8000) }).then(r => r.json()).catch(() => null),
+        fetch(`https://api.twelvedata.com/quote?symbol=${fxSymbols}&apikey=${tdKey}`, { signal: AbortSignal.timeout(8000) }).then(r => r.json()).catch(() => null),
+        fetch(`https://api.twelvedata.com/quote?symbol=${commoditySymbols}&apikey=${tdKey}`, { signal: AbortSignal.timeout(8000) }).then(r => r.json()).catch(() => null),
+      ]);
+
+      if (indicesRes) {
+        results.push("=== INDICI BURSIERI (Twelve Data, " + timestamp + ") ===");
+        for (const [sym, data] of Object.entries(indicesRes as Record<string, any>)) {
+          if (data?.close) results.push(`${data.name || sym}: ${data.close} (${data.percent_change > 0 ? '+' : ''}${data.percent_change}%)`);
+        }
+      }
+      if (fxRes) {
+        results.push("\n=== CURS VALUTAR (Twelve Data) ===");
+        for (const [sym, data] of Object.entries(fxRes as Record<string, any>)) {
+          if (data?.close) results.push(`${sym}: ${data.close} (${data.percent_change > 0 ? '+' : ''}${data.percent_change}%)`);
+        }
+      }
+      if (commodRes) {
+        results.push("\n=== MĂRFURI (Twelve Data) ===");
+        for (const [sym, data] of Object.entries(commodRes as Record<string, any>)) {
+          if (data?.close) results.push(`${data.name || sym}: ${data.close} USD (${data.percent_change > 0 ? '+' : ''}${data.percent_change}%)`);
+        }
+      }
+    } catch (e) {
+      console.error("Twelve Data fetch error:", e);
+    }
+
+    // Brent Oil via Twelve Data
+    try {
+      const brentRes = await fetch(`https://api.twelvedata.com/quote?symbol=BZ&apikey=${tdKey}`, { signal: AbortSignal.timeout(5000) }).then(r => r.json()).catch(() => null);
+      if (brentRes?.close) results.push(`Brent Oil: ${brentRes.close} USD (${brentRes.percent_change > 0 ? '+' : ''}${brentRes.percent_change}%)`);
+    } catch (e) { /* skip */ }
+  } else {
+    results.push("(TWELVE_DATA_API_KEY lipsește — date de piață indisponibile)");
+  }
+
+  // 2. CoinGecko — BTC, ETH (no API key needed)
+  try {
+    const cryptoRes = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true", { signal: AbortSignal.timeout(5000) }).then(r => r.json()).catch(() => null);
+    if (cryptoRes) {
+      results.push("\n=== CRYPTO (CoinGecko) ===");
+      if (cryptoRes.bitcoin) results.push(`BTC/USD: ${cryptoRes.bitcoin.usd.toLocaleString()} USD (${cryptoRes.bitcoin.usd_24h_change?.toFixed(2)}%)`);
+      if (cryptoRes.ethereum) results.push(`ETH/USD: ${cryptoRes.ethereum.usd.toLocaleString()} USD (${cryptoRes.ethereum.usd_24h_change?.toFixed(2)}%)`);
+    }
+  } catch (e) { console.error("CoinGecko fetch error:", e); }
+
+  // 3. BNR XML — EUR/RON, USD/RON
+  try {
+    const bnrRes = await fetch("https://www.bnr.ro/nbrfxrates.xml", { signal: AbortSignal.timeout(5000) }).then(r => r.text()).catch(() => null);
+    if (bnrRes) {
+      results.push("\n=== CURS BNR (oficial) ===");
+      const eurMatch = bnrRes.match(/<Rate currency="EUR">([^<]+)<\/Rate>/);
+      const usdMatch = bnrRes.match(/<Rate currency="USD">([^<]+)<\/Rate>/);
+      const dateMatch = bnrRes.match(/<Cube date="([^"]+)">/);
+      const bnrDate = dateMatch?.[1] ?? "n/a";
+      if (eurMatch) results.push(`EUR/RON: ${eurMatch[1]} (curs oficial BNR din ${bnrDate})`);
+      if (usdMatch) results.push(`USD/RON: ${usdMatch[1]} (curs oficial BNR din ${bnrDate})`);
+    }
+  } catch (e) { console.error("BNR fetch error:", e); }
+
+  // 4. Romanian context (semi-static, updated periodically)
+  results.push("\n=== CONTEXT ROMÂNIA ===");
+  results.push("Dobânda BNR: 6,50% (nemodificată din august 2024)");
+  results.push("ROBOR 3M: ~5,9-6,0%");
+  results.push("Inflație CPI România: ~5-6% an/an (verifică ultima publicare INS)");
+
+  return results.join("\n");
+}
+
+// --- New DailyBrief interface (Bloomberg Terminal 10-section layout) ---
 export interface DailyBrief {
   date: string;
   generatedAt: string;
   headline: string;
+  subheadline: string;
+  tickerItems: { text: string; direction: "up" | "down" | "flat" }[];
   snapshot: {
     bullets: string[];
-    indices: { name: string; change: string; value: string }[];
-    fx: { name: string; change: string; value: string }[];
-    rates: { name: string; value: string }[];
-    commodities: { name: string; change: string; value: string }[];
+    instruments: { name: string; value: string; change: string; timestamp: string }[];
   };
-  macroSentiment: { markdown: string };
-  equities: {
-    markdown: string;
-    keyStocks: { symbol: string; move: string; trigger: string; importance: string }[];
+  macroSentiment: { paragraphs: string[] };
+  equityMarkets: {
+    us: { summary: string; details: string };
+    europe: { summary: string; details: string };
+    asia: { summary: string; details: string };
   };
-  ratesFx: { markdown: string };
-  commoditiesCrypto: { markdown: string };
-  topNews: {
+  ratesFx: {
+    rates: string;
+    fx: string;
+  };
+  commoditiesCrypto: {
+    oil: string;
+    gold: string;
+    crypto: string;
+  };
+  topStories: {
+    tag: string;
+    tagType: "geo" | "tech" | "fed" | "macro" | "earnings";
     title: string;
-    markdown: string;
-    affectedInstruments: string[];
-    bullishScenario: string;
-    bearishScenario: string;
+    whatHappened: string;
+    whyItMatters: string;
+    instruments: string[];
+    bullCase: string;
+    bearCase: string;
   }[];
   retailImpact: string[];
-  riskScenarios: { markdown: string };
-  sectorHeatmap: { sector: string; sentiment: "bullish" | "bearish" | "neutral"; score: number }[];
+  riskScenarios: {
+    base: { probability: number; description: string; invalidatedBy: string };
+    bull: { probability: number; description: string; confirmedBy: string };
+    bear: { probability: number; description: string; confirmedBy: string };
+    volatilityNote: string;
+  };
+  clientPitch: string[];
+  transparency: string[];
 }
 
 const DAILY_BRIEF_SCHEMA = {
   type: "object", additionalProperties: false, properties: {
-    headline: { type: "string", description: "Un titlu puternic și profesional pentru briefingul zilei, de tip 'Market Brief: [tema principală]'. Maxim 10-15 cuvinte." },
+    headline: { type: "string", description: "Titlu scurt (max 12-15 cuvinte), tip 'temă dominantă + motiv'. Ex: 'Escaladare în Hormuz, sell-off tech și Fed Minutes azi la 21:00'" },
+    subheadline: { type: "string", description: "2-3 propoziții care sumarizează cele 3 fronturi/teme majore ale zilei cu cifre concrete." },
+    tickerItems: {
+      type: "array", items: {
+        type: "object", additionalProperties: false, properties: {
+          text: { type: "string", description: "Text scurt pentru ticker: 'S&P 500 5,450.30 -0.45%' sau 'BTC ~63,550'" },
+          direction: { type: "string", enum: ["up", "down", "flat"] }
+        }, required: ["text", "direction"]
+      }, description: "12-16 elemente de ticker tape: indici majori, FX, mărfuri, crypto, evenimente cheie."
+    },
     snapshot: {
       type: "object", additionalProperties: false, properties: {
-        bullets: { type: "array", items: { type: "string", description: "Fiecare bullet trebuie să fie o propoziție completă de 15-25 cuvinte care captează esența unei știri majore." }, description: "5-7 bullet points cu cele mai importante evenimente ale zilei." },
-        indices: { type: "array", items: { type: "object", additionalProperties: false, properties: { name: { type: "string" }, change: { type: "string", description: "Variația procentuală estimată (ex: '+0.85%' sau '-1.2%'). Estimează realist pe baza sentimentului din știri." }, value: { type: "string", description: "Valoarea estimată realistă a indicelui (ex: '5,450.30'). Folosește valori plauzibile pentru 2026." } }, required: ["name", "change", "value"] }, description: "Minim 4 indici: S&P 500, NASDAQ, FTSE 100, DAX. Estimează valori realiste." },
-        fx: { type: "array", items: { type: "object", additionalProperties: false, properties: { name: { type: "string" }, change: { type: "string" }, value: { type: "string" } }, required: ["name", "change", "value"] }, description: "Minim 3 perechi: EUR/USD, USD/JPY, GBP/USD. Estimează valori realiste." },
-        rates: { type: "array", items: { type: "object", additionalProperties: false, properties: { name: { type: "string" }, value: { type: "string" } }, required: ["name", "value"] }, description: "Randamente obligațiuni: Treasury 10Y, Bund 10Y. Estimează realist." },
-        commodities: { type: "array", items: { type: "object", additionalProperties: false, properties: { name: { type: "string" }, change: { type: "string" }, value: { type: "string" } }, required: ["name", "change", "value"] }, description: "Petrol Brent, Aur, eventual Argint sau Bitcoin. Estimează valori realiste." }
-      },
-      required: ["bullets", "indices", "fx", "rates", "commodities"]
+        bullets: { type: "array", items: { type: "string", description: "Bullet substanțial de 25-40 cuvinte, cu bold pe tema cheie. Include cifre concrete." }, description: "4-6 bullet points cu cele mai importante mișcări/teme ale zilei." },
+        instruments: { type: "array", items: {
+          type: "object", additionalProperties: false, properties: {
+            name: { type: "string", description: "Numele instrumentului: S&P 500, Nasdaq, Dow Jones, Euro Stoxx 50, DAX, FTSE 100, Nikkei 225, Hang Seng, KOSPI, EUR/USD, USD/JPY, GBP/USD, EUR/RON (BNR), USD/RON (BNR), UST 10Y, UST 2Y, Bund 10Y, Brent, WTI, Aur (XAU), BTC/USD" },
+            value: { type: "string", description: "Valoarea/nivelul instrumentului. Folosește datele REALE furnizate. Dacă nu ai o valoare, scrie 'n/d*'." },
+            change: { type: "string", description: "Variația procentuală (ex: '-0.45%', '+5.5%', 'flat', 'n/d*')" },
+            timestamp: { type: "string", description: "Referința orară (ex: 'închidere 7 iul, 22:00 EEST')" }
+          }, required: ["name", "value", "change", "timestamp"]
+        }, description: "Tabel COMPLET cu minim 15-20 instrumente: 8-9 indici, 4-5 FX (inclusiv EUR/RON, USD/RON), 2-3 randamente, 3-4 mărfuri+crypto." }
+      }, required: ["bullets", "instruments"]
     },
     macroSentiment: {
-      type: "object", additionalProperties: false, properties: { markdown: { type: "string", description: "Analiză DETALIATĂ de minim 150-200 de cuvinte despre sentimentul macro global. Include politica monetară (Fed, BCE, BoJ), inflație, creștere economică, riscuri geopolitice. Scrie ca un analist Goldman Sachs." } },
-      required: ["markdown"]
-    },
-    equities: {
       type: "object", additionalProperties: false, properties: {
-        markdown: { type: "string", description: "Analiză DETALIATĂ de minim 150-200 cuvinte despre piața de acțiuni. Menționează sectoare specifice, companii individuale (NVDA, AAPL, MSFT etc.), earnings, rotații sectoriale, fluxuri instituționale." },
-        keyStocks: { type: "array", items: { type: "object", additionalProperties: false, properties: { symbol: { type: "string" }, move: { type: "string", description: "Variație procentuală estimată (ex: '+3.2%' sau '-1.5%')" }, trigger: { type: "string", description: "Explicație scurtă a catalizatorului (ex: 'Earnings Q2 peste așteptări')" }, importance: { type: "string", enum: ["high", "medium", "low"] } }, required: ["symbol", "move", "trigger", "importance"] }, description: "4-8 acțiuni cheie mișcate de știrile zilei." }
-      },
-      required: ["markdown", "keyStocks"]
+        paragraphs: { type: "array", items: { type: "string", description: "Paragraf dens de 60-100 cuvinte." }, description: "2-3 paragrafe: sentiment general (risk-on/off), teme dominante, mecanisme economice. Stil analist de desk, nu jurnalist." }
+      }, required: ["paragraphs"]
+    },
+    equityMarkets: {
+      type: "object", additionalProperties: false, properties: {
+        us: { type: "object", additionalProperties: false, properties: {
+          summary: { type: "string", description: "2-3 propoziții: indici + sectoare forte/slabe cu %." },
+          details: { type: "string", description: "Detalii: 3-5 acțiuni/tickere cheie cu mișcare și trigger. Font mai mic, culoare dim." }
+        }, required: ["summary", "details"] },
+        europe: { type: "object", additionalProperties: false, properties: {
+          summary: { type: "string" }, details: { type: "string" }
+        }, required: ["summary", "details"] },
+        asia: { type: "object", additionalProperties: false, properties: {
+          summary: { type: "string" }, details: { type: "string" }
+        }, required: ["summary", "details"] }
+      }, required: ["us", "europe", "asia"]
     },
     ratesFx: {
-      type: "object", additionalProperties: false, properties: { markdown: { type: "string", description: "Analiză DETALIATĂ de minim 120-180 cuvinte despre piața obligațiunilor, yield-uri, spread-uri de credit, și piața valutară (EUR/USD, USD/JPY, DXY). Explică mecanismele de transmisie." } },
-      required: ["markdown"]
+      type: "object", additionalProperties: false, properties: {
+        rates: { type: "string", description: "Paragraf dens (80-120 cuvinte): curba US (2Y/10Y), Bund, semnal piață obligațiuni, pricing Fed." },
+        fx: { type: "string", description: "Paragraf dens (80-120 cuvinte): EUR/USD, USD/JPY, GBP/USD, EUR/RON, USD/RON + context BNR." }
+      }, required: ["rates", "fx"]
     },
     commoditiesCrypto: {
-      type: "object", additionalProperties: false, properties: { markdown: { type: "string", description: "Analiză DETALIATĂ de minim 120-180 cuvinte despre mărfuri (petrol, aur, metale industriale) și crypto (Bitcoin, ETF-uri). Include factori de cerere/ofertă, OPEC+, tendințe." } },
-      required: ["markdown"]
+      type: "object", additionalProperties: false, properties: {
+        oil: { type: "string", description: "Paragraf (60-100 cuvinte): Brent/WTI, nivel, %, motive, context OPEC/geopolitic." },
+        gold: { type: "string", description: "Paragraf (60-80 cuvinte): nivel, %, rol de hedge, relație cu randamente reale." },
+        crypto: { type: "string", description: "Paragraf (60-80 cuvinte): BTC, ETH opțional, catalizatori, corelație cu active de risc." }
+      }, required: ["oil", "gold", "crypto"]
     },
-    topNews: {
-      type: "array",
-      items: {
+    topStories: {
+      type: "array", items: {
         type: "object", additionalProperties: false, properties: {
-          title: { type: "string", description: "Titlul știrii principale." },
-          markdown: { type: "string", description: "Analiză detaliată de 80-150 cuvinte: ce s-a întâmplat, de ce contează, ce impact are pe piețe." },
-          bullishScenario: { type: "string", description: "Scenariul optimist în 1-2 propoziții: ce s-ar întâmpla în cel mai bun caz pentru investitori." },
-          bearishScenario: { type: "string", description: "Scenariul pesimist în 1-2 propoziții: ce riscuri prezintă pentru piețe." },
-          affectedInstruments: { type: "array", items: { type: "string" }, description: "3-6 instrumente/tickere afectate direct (ex: 'NVDA', 'Brent Oil', 'EUR/USD', 'Treasury 10Y')." }
-        },
-        required: ["title", "markdown", "bullishScenario", "bearishScenario", "affectedInstruments"]
-      },
-      description: "3-5 știri principale cu analiză detaliată, scenarii bull/bear și instrumente afectate."
+          tag: { type: "string", description: "Etichetă categorie (ex: 'Geopolitic · Energie', 'Tech · Chip-uri', 'Banca Centrală')" },
+          tagType: { type: "string", enum: ["geo", "tech", "fed", "macro", "earnings"], description: "Tipul tag-ului pentru colorare UI." },
+          title: { type: "string", description: "Titlu headline scurt și impactant." },
+          whatHappened: { type: "string", description: "4-5 rânduri: CE s-a întâmplat concret, cu cifre și detalii." },
+          whyItMatters: { type: "string", description: "3-4 rânduri: DE CE contează pentru piață, mecanisme de transmisie." },
+          instruments: { type: "array", items: { type: "string" }, description: "4-6 instrumente/tickere afectate direct." },
+          bullCase: { type: "string", description: "Scenariu pozitiv în 2-3 propoziții + ce l-ar confirma." },
+          bearCase: { type: "string", description: "Scenariu negativ în 2-3 propoziții + ce l-ar confirma." }
+        }, required: ["tag", "tagType", "title", "whatHappened", "whyItMatters", "instruments", "bullCase", "bearCase"]
+      }, description: "MAXIMUM 3 știri majore (adâncime, nu lățime!). Fiecare cu analiză completă."
     },
-    retailImpact: { type: "array", items: { type: "string" }, description: "4-6 sfaturi concrete și acționabile pentru investitorii retail, formulate ca propoziții complete." },
+    retailImpact: { type: "array", items: { type: "string", description: "Bullet orientat pe portofoliu, ton neutru, fără recomandări directe. 20-30 cuvinte." }, description: "4-5 bullet-uri: întrebări de portofoliu, expuneri vulnerabile/defensive." },
     riskScenarios: {
-      type: "object", additionalProperties: false, properties: { markdown: { type: "string", description: "Descrie EXTREM de detaliat (minim 200 cuvinte) trei scenarii: BASE CASE (cel mai probabil), BULL CASE (optimist) și BEAR CASE (pesimist). Pentru fiecare, include probabilitatea estimată, catalizatorii și implicațiile pentru portofoliu." } },
-      required: ["markdown"]
+      type: "object", additionalProperties: false, properties: {
+        base: { type: "object", additionalProperties: false, properties: {
+          probability: { type: "number", description: "Probabilitate în procent (ex: 50)" },
+          description: { type: "string", description: "3-4 propoziții cu scenariul de bază." },
+          invalidatedBy: { type: "string", description: "Ce ar invalida acest scenariu." }
+        }, required: ["probability", "description", "invalidatedBy"] },
+        bull: { type: "object", additionalProperties: false, properties: {
+          probability: { type: "number" },
+          description: { type: "string" },
+          confirmedBy: { type: "string" }
+        }, required: ["probability", "description", "confirmedBy"] },
+        bear: { type: "object", additionalProperties: false, properties: {
+          probability: { type: "number" },
+          description: { type: "string" },
+          confirmedBy: { type: "string" }
+        }, required: ["probability", "description", "confirmedBy"] },
+        volatilityNote: { type: "string", description: "Paragraf despre VIX, MOVE Index, nivel de stres." }
+      }, required: ["base", "bull", "bear", "volatilityNote"]
     },
-    sectorHeatmap: {
-      type: "array",
-      items: {
-        type: "object", additionalProperties: false, properties: {
-          sector: { type: "string", description: "Numele sectorului (ex: Tech, Energie, Bănci, Sănătate, Industrie, Imobiliare)" },
-          sentiment: { type: "string", enum: ["bullish", "bearish", "neutral"] },
-          score: { type: "number", description: "Scor de la 0 la 100 indicând intensitatea (ex: 80 pentru puternic bullish, 20 pentru puternic bearish)" }
-        },
-        required: ["sector", "sentiment", "score"]
-      },
-      description: "Generează o hartă a sentimentului pentru 5-7 sectoare principale bazată pe știrile zilei."
-    }
+    clientPitch: { type: "array", items: { type: "string", description: "Paragraf de 2-3 propoziții, ton conversațional ca la telefon." }, description: "5-6 paragrafe — mini-rezumat pentru client, format vorbit, cu 3 idei principale + poziționare risk-on/off." },
+    transparency: { type: "array", items: { type: "string" }, description: "4-8 note tehnice: ce date sunt estimate, ce surse au fost folosite, ce valori lipsesc." }
   },
-  required: ["headline", "snapshot", "macroSentiment", "equities", "ratesFx", "commoditiesCrypto", "topNews", "riskScenarios", "sectorHeatmap"]
+  required: ["headline", "subheadline", "tickerItems", "snapshot", "macroSentiment", "equityMarkets", "ratesFx", "commoditiesCrypto", "topStories", "retailImpact", "riskScenarios", "clientPitch", "transparency"]
 };
 
 export const getDailyBrief = createServerFn({ method: "POST" })
@@ -1093,7 +1225,7 @@ export const getDailyBrief = createServerFn({ method: "POST" })
     const yyyy = roTime.getFullYear();
     const mm = String(roTime.getMonth() + 1).padStart(2, '0');
     const dd = String(roTime.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}-v6`;
+    return `${yyyy}-${mm}-${dd}-v7`;
   }
   const today = getBriefCycleId();
 
@@ -1113,13 +1245,13 @@ export const getDailyBrief = createServerFn({ method: "POST" })
     console.warn("Eroare la verificarea bazei de date. Continuăm generarea...", e);
   }
 
-  // 2. Fallback la Cache în Memorie (in-memory dev fallback)
+  // 2. Fallback la Cache în Memorie
   if (dailyBriefCache && dailyBriefCache.brief.date === today) {
     return { brief: dailyBriefCache.brief };
   }
 
   if (isGeneratingBrief) {
-    return { brief: null, error: "Brief-ul zilnic este în curs de generare. Te rugăm să reîncarci pagina în 15 secunde." };
+    return { brief: null, error: "Brief-ul zilnic este în curs de generare. Te rugăm să reîncarci pagina în 30 secunde." };
   }
 
   const rlKey = `global_daily_brief`;
@@ -1128,36 +1260,58 @@ export const getDailyBrief = createServerFn({ method: "POST" })
   }
 
   isGeneratingBrief = true;
+
+  if (!process.env.OPENAI_API_KEY) {
+    isGeneratingBrief = false;
+    return { brief: null, error: "Nu este configurat API Key-ul OpenAI." };
+  }
+
+  // Fetch live market data + news in parallel
   const newsData = newsCache?.items ?? SEED_NEWS;
   const topNews = newsData.slice(0, 15);
 
-  if (!process.env.OPENAI_API_KEY) {
-    const keyStatus = process.env.OPENAI_API_KEY ? process.env.OPENAI_API_KEY.substring(0, 3) + "..." : "LIPSA";
-    return { brief: null, error: `Nu este configurat API Key-ul OpenAI. Status cheie: ${keyStatus}` };
+  let liveMarketData = "";
+  try {
+    liveMarketData = await fetchLiveMarketData();
+  } catch (e) {
+    console.error("Failed to fetch live market data:", e);
+    liveMarketData = "(Date de piață live indisponibile)";
   }
 
   const newsSummary = topNews.map((n, i) =>
     `${i + 1}. [${n.source}] ${n.title} — Impact: ${n.impact}, Sentiment: ${n.sentiment}, Teme: ${n.themes.join(", ")}, Regiuni: ${n.regions.join(", ")}\nRezumat: ${n.summary}`
   ).join("\n\n");
 
-  const sys = `Ești un MARKET & NEWS ANALYST SENIOR pentru un desk de tranzacționare global. Scopul tău este să generezi cel mai COMPLEX și EXHAUSTIV Daily Market Brief.
-Nu te zgârci la cuvinte! Fiecare câmp 'markdown' din JSON trebuie să conțină analize de minim 150-200 de cuvinte, cu argumente profunde, context istoric și previziuni detaliate. 
-Gândește ca un analist de top de la Goldman Sachs.
-REGULĂ CRITICĂ: Nu inventa/halucina prețuri exacte (nu pune S&P la 4500 sau Aurul la 1950). Bazează-te STRICT pe trendurile din știri (creștere, scădere, volatilitate) și analizează impactul macroeconomic. Când nu știi prețul exact, scrie doar analiza calitativă.`;
+  const roDate = new Date().toLocaleDateString("ro-RO", { timeZone: "Europe/Bucharest", weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const roTime = new Date().toLocaleTimeString("ro-RO", { timeZone: "Europe/Bucharest", hour: '2-digit', minute: '2-digit' });
 
-  const usr = `DATA CURENTĂ ESTE: ${new Date().toLocaleDateString("ro-RO", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}. 
-Generează un MARKET BRIEF ZILNIC PREMIUM (în ROMÂNĂ) pentru data de astăzi folosind ACESTE ȘTIRI RECENTE:
+  const sys = `Ești un Market & News Analyst senior care lucrează pentru un desk de brokeraj / wealth advisory. Generezi un Daily Market Brief în limba română (păstrezi terminologia financiară în engleză acolo unde e standard: S&P 500, FOMC, hawkish, dovish, guidance, earnings, dot plot etc.).
 
+REGULI DE CONȚINUT (obligatorii):
+1. ADÂNCIME, NU LĂȚIME. Alege maximum 3 povești majore ale zilei și tratează-le cu context complet: ce s-a întâmplat, de ce contează, instrumente afectate, scenariu bullish vs bearish. Restul claselor de active primesc sinteză scurtă.
+2. ZERO CIFRE INVENTATE. Folosește STRICT datele de piață furnizate mai jos. Dacă o valoare lipsește, marchează cu 'n/d*' și notează în secțiunea de transparență.
+3. Fiecare cifră de piață citată e însoțită de timestamp (data + ora).
+4. Context românesc obligatoriu: curs BNR EUR/RON și USD/RON (din datele furnizate), dobândă BNR, ROBOR, inflație CPI.
+5. Ton: profesional de desk, dens, fără fluff, orientat spre context/scenarii/risk management. NU recomandări de tranzacționare.`;
+
+  const usr = `Data de azi: ${roDate}
+Ora de generare: ${roTime} EEST
+
+=== DATE DE PIAȚĂ REALE (folosește-le OBLIGATORIU în snapshot/tabele) ===
+${liveMarketData}
+
+=== ȘTIRI RECENTE (ultimele 24h) ===
 ${newsSummary}
 
-Fii EXTREM de detaliat și analitic în câmpurile "markdown". Oferă context, cauzalitate și predicții.
-Completează restul din cunoștințele tale generale și știrile curente, aducând un plus de valoare peste știrile oferite. Nu pune cifre false la prețuri.`;
+OBIECTIV: Construiește un DAILY MARKET BRIEF complet cu toate cele 10 secțiuni din schema cerută.
+REGULĂ: Folosește datele de piață de mai sus pentru tabelul de instrumente din snapshot. Dacă o valoare lipsește, pune 'n/d*' și notează în transparență.
+Fii EXTREM de detaliat și analitic. Gândește ca un analist de top.`;
 
   try {
     const result = await callAI(usr, sys, DAILY_BRIEF_SCHEMA);
     if (result) {
       const brief: DailyBrief = {
-        date: new Date().toLocaleString("ro-RO", { timeZone: "Europe/Bucharest" }),
+        date: today,
         generatedAt: new Date().toISOString(),
         ...result,
       };

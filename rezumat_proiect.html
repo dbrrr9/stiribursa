@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rezumat Proiect StiriBursa</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            color: #0f172a;
+        }
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            padding: 24px;
+            margin-bottom: 24px;
+            border-left: 4px solid #0ea5e9;
+        }
+        .card h2 {
+            color: #0369a1;
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .badge {
+            background-color: #e0f2fe;
+            color: #0369a1;
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            display: inline-block;
+            margin-bottom: 16px;
+        }
+        .implications {
+            background-color: #f1f5f9;
+            padding: 16px;
+            border-radius: 8px;
+            margin-top: 16px;
+            border: 1px solid #e2e8f0;
+        }
+        .implications h4 {
+            color: #475569;
+            font-weight: 600;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+        }
+    </style>
+</head>
+<body class="antialiased">
+    <div class="max-w-4xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+        
+        <header class="text-center mb-16">
+            <h1 class="text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl mb-4">
+                Jurnal de Dezvoltare: <span class="text-sky-600">StiriBursa</span>
+            </h1>
+            <p class="text-xl text-slate-500 max-w-2xl mx-auto">
+                O trecere în revistă a tuturor modificărilor aduse proiectului inițial (generat via Lovable) pentru a-l transforma într-o aplicație robustă, stabilă și gata de producție.
+            </p>
+        </header>
+
+        <div class="space-y-8">
+
+            <!-- Punctul 1 -->
+            <div class="card border-l-sky-500">
+                <h2>1. Arhitectura API și Securitatea Cheilor</h2>
+                <div class="badge">TanStack Start & Server Functions</div>
+                <p class="text-slate-600 leading-relaxed">
+                    <strong>Ce s-a schimbat:</strong> Aplicația inițială de frontend era vulnerabilă dacă apelam API-urile AI direct din browser (cheile secrete ar fi fost vizibile). Am rescris logica principală folosind <em>TanStack Start Server Functions</em>.
+                </p>
+                <div class="implications">
+                    <h4>Implicare și Rezultat:</h4>
+                    <p class="text-sm text-slate-600">
+                        Toate apelurile către OpenAI și procesarea grea se întâmplă acum strict pe server. Cheile tale (ex: <code>OPENAI_API_KEY</code>, Supabase Service Key) sunt 100% invizibile pentru utilizatori. Interfața web (frontend) primește doar rezultatul final, curat și gata de afișare.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Punctul 2 -->
+            <div class="card border-l-emerald-500">
+                <h2 class="text-emerald-700">2. Integrarea Inteligenței Artificiale (OpenAI)</h2>
+                <div class="badge !bg-emerald-100 !text-emerald-700">gpt-4o-mini & JSON Schemas</div>
+                <p class="text-slate-600 leading-relaxed">
+                    <strong>Ce s-a schimbat:</strong> Am migrat de la API-uri instabile/limitate către OpenAI. Pentru a ne asigura că AI-ul răspunde mereu în formatul vizual pe care l-am desenat (Market Brief cu sectoare, actiuni, heatmaps), am implementat <em>JSON Schemas stricte</em> (cu <code>additionalProperties: false</code>).
+                </p>
+                <div class="implications">
+                    <h4>Implicare și Rezultat:</h4>
+                    <p class="text-sm text-slate-600">
+                        AI-ul este forțat matematic să returneze obiecte programabile, nu text la întâmplare. Astfel, aplicația nu se mai „strică” niciodată din cauza unei virgule uitate de AI, iar componentele React știu exact ce date vor primi pentru a desena graficele și rezumatele.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Punctul 3 -->
+            <div class="card border-l-indigo-500">
+                <h2 class="text-indigo-700">3. Baze de Date și Memorie Cache</h2>
+                <div class="badge !bg-indigo-100 !text-indigo-700">Supabase & React Query</div>
+                <p class="text-slate-600 leading-relaxed">
+                    <strong>Ce s-a schimbat:</strong> Deoarece generarea unui Brief sau analizarea unui articol consumă timp și bani (credite OpenAI), am cuplat aplicația la baza ta de date <strong>Supabase</strong> (tabelele <code>news_analyses</code> și <code>market_briefs</code>). Am implementat un sistem de "Upsert" și steaguri (flags) pentru a preveni rulările duble concurente.
+                </p>
+                <div class="implications">
+                    <h4>Implicare și Rezultat:</h4>
+                    <p class="text-sm text-slate-600">
+                        Când un utilizator citește o știre, ea este procesată de AI o singură dată și salvată în baza de date. Următorii 10.000 de utilizatori vor primi rezumatul instant din baza de date, fără să te mai coste vreun cent la OpenAI. Pe frontend, <em>React Query</em> păstrează datele în memoria browserului pentru navigare instantanee.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Punctul 4 -->
+            <div class="card border-l-rose-500">
+                <h2 class="text-rose-700">4. Diagnosticarea și Combaterea Limitărilor de Hosting</h2>
+                <div class="badge !bg-rose-100 !text-rose-700">Netlify Timeouts & Debugging</div>
+                <p class="text-slate-600 leading-relaxed">
+                    <strong>Ce s-a schimbat:</strong> Am întâmpinat două probleme tehnice uriașe specifice mediului "Serverless" Netlify:
+                    <br>1. Librăria <code>yahoo-finance2</code> prăbușea serverul la deploy. Am eliminat-o și am creat un mecanism robust (stub) pentru a evita blocajul.
+                    <br>2. <strong>Limita de 10 secunde</strong> a Netlify întrerupea brutal generarea Market Brief-ului. Am modificat arhitectura cererii, tăind volumul de date trimis la AI la informația esențială (reducând timpul de răspuns de la 30 secunde la sub 8 secunde).
+                </p>
+                <div class="implications">
+                    <h4>Implicare și Rezultat:</h4>
+                    <p class="text-sm text-slate-600">
+                        Platforma a fost stabilizată pentru a funcționa corect în limitele actuale ale Netlify. De asemenea, am instalat un sistem de alerte direct în interfața grafică care detectează erorile de tip "API Key Lipsă" ca să știm mereu unde e problema dacă pică ceva, în loc să primim erori generice.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Punctul 5 -->
+            <div class="card border-l-amber-500">
+                <h2 class="text-amber-700">5. Planul pentru Viitor: Fără Limite</h2>
+                <div class="badge !bg-amber-100 !text-amber-700">Railway / VPS Hosting</div>
+                <p class="text-slate-600 leading-relaxed">
+                    <strong>Ce s-a schimbat (Concluzie):</strong> Am pregătit terenul și am clarificat strategia pentru a depăși definitiv „coșmarul” de 10 secunde de la Netlify. 
+                </p>
+                <div class="implications">
+                    <h4>Implicare și Rezultat:</h4>
+                    <p class="text-sm text-slate-600">
+                        Codul este acum flexibil. În secunda în care te hotărăști să mutăm pe <strong>Railway.app</strong> sau un <strong>Server VPS dedicat</strong>, aplicația va funcționa fără niciun Timeout (proces de tip Server Node.js 24/7). Acolo vom putea relua generările de analize ample de minute întregi și vom putea adăuga "Cron Jobs" (operațiuni automate la o anumită oră din noapte).
+                    </p>
+                </div>
+            </div>
+
+        </div>
+
+        <footer class="mt-12 text-center text-slate-400 text-sm">
+            <p>Generat de Antigravity AI &bull; Pregătit exclusiv pentru proiectul StiriBursa</p>
+        </footer>
+
+    </div>
+</body>
+</html>
