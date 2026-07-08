@@ -29,6 +29,8 @@ const AI_MODEL = "gpt-4o-mini";
 
 // In-memory cache (per worker instance)
 let newsCache: { items: NewsItem[]; ts: number } | null = null;
+// In-memory index for fast single-item lookups (avoids DB roundtrip)
+const newsItemIndex = new Map<string, NewsItem>();
 const CACHE_TTL_MS = 1000 * 60 * 5; // 5 min — frequent refreshes for fresher news
 const analysisCache = new Map<string, ArticleAnalysis>();
 let dailyBriefCache: { brief: DailyBrief; ts: number } | null = null;
@@ -551,6 +553,8 @@ export const fetchLatestNews = createServerFn({ method: "GET" }).handler(async (
           markets: item.markets,
           relevanceScore: item.relevance_score,
         }));
+        // Populate in-memory index for instant getNewsItem lookups
+        for (const item of items) newsItemIndex.set(item.id, item);
         return { items, cached: true, source: "database" as const };
       }
     }
@@ -582,6 +586,9 @@ export const fetchLatestNews = createServerFn({ method: "GET" }).handler(async (
 
       const items = classified.slice(0, TARGET_TOTAL);
       
+      // Populate in-memory index for instant getNewsItem lookups
+      for (const item of items) newsItemIndex.set(item.id, item);
+
       const itemsToInsert = items.map(n => ({
         id: n.id,
         title: n.title,
@@ -816,20 +823,13 @@ export const getNewsItem = createServerFn({ method: "POST" })
       console.error("Failed to get news item from DB", e);
     }
     
-    // 2. Try SEED_NEWS
+    // 2. Try in-memory index (instant, no network)
+    const cached = newsItemIndex.get(data.id);
+    if (cached) return { item: cached };
+
+    // 3. Try SEED_NEWS
     const seed = SEED_NEWS.find((n) => n.id === data.id);
-    if (seed) return { item: seed };
-
-    // 3. Fallback: fetch fresh news and search there
-    try {
-      const freshNews = await fetchLatestNews();
-      const found = freshNews.items.find((n) => n.id === data.id);
-      if (found) return { item: found };
-    } catch (e) {
-      console.error("Fallback fetchLatestNews failed in getNewsItem", e);
-    }
-
-    return { item: null };
+    return { item: seed ?? null };
   });
 
 // ============================================================================
